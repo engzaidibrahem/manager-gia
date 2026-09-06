@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gia_user
+      POSTGRES_PASSWORD: gia_local_dev
+      POSTGRES_DB: gia_shawarma
+    ports:
+      - "5432:5432"
+    volumes:
+      - gia_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gia_user -d gia_shawarma"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  gia_pgdata:
