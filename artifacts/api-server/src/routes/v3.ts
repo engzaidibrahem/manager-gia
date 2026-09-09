@@ -12,6 +12,25 @@ import {
   postWarehouseToKitchen,
   updateItemMinimum,
 } from "../v3/warehouseService";
+import {
+  addPurchasePayment,
+  createPurchase,
+  listPurchasePayments,
+  listPurchases,
+  voidPurchase,
+} from "../v3/purchaseService";
+import {
+  getFinanceSummary,
+  listCapital,
+  listExpenses,
+  listIncome,
+  postCapital,
+  postExpense,
+  postIncome,
+  voidCapital,
+  voidExpense,
+  voidIncome,
+} from "../v3/financeService";
 import { AppError } from "../lib/errors";
 
 const router: IRouter = Router();
@@ -197,6 +216,234 @@ router.get(
     const row = summary.rows.find((r) => r.id === id);
     if (!row) throw new AppError("ITEM_NOT_FOUND", "المادة غير موجودة", 404);
     res.json(row);
+  }),
+);
+
+// ---- Purchases ----
+router.get(
+  "/purchases",
+  asyncHandler(async (req, res) => {
+    const data = await listPurchases({
+      q: String(req.query.q || ""),
+      fromDate: req.query.from ? String(req.query.from) : undefined,
+      toDate: req.query.to ? String(req.query.to) : undefined,
+      destination: req.query.destination ? String(req.query.destination) : undefined,
+      page: Number(req.query.page || 1),
+      pageSize: Number(req.query.pageSize || 50),
+    });
+    res.json(data);
+  }),
+);
+
+router.post(
+  "/purchases",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        purchaseDate: z.string().optional(),
+        purchaseTime: z.string().optional(),
+        itemName: z.string().min(1),
+        inventoryItemId: z.number().int().positive().nullable().optional(),
+        newItem: z
+          .object({
+            name: z.string().min(1),
+            category: z.string().optional(),
+            baseUnit: z.string().optional(),
+            minimumStock: z.number().nullable().optional(),
+          })
+          .nullable()
+          .optional(),
+        quantityNumeric: z.number().nullable().optional(),
+        quantityRaw: z.string().optional(),
+        unitRaw: z.string().optional(),
+        unitPrice: z.number().optional(),
+        totalAmount: z.number(),
+        paidAmount: z.number().optional(),
+        paymentStatus: z.enum(["PAID", "UNPAID", "PARTIAL"]).optional(),
+        supplier: z.string().optional(),
+        purchasedBy: z.string().optional(),
+        destination: z.enum(["WAREHOUSE", "KITCHEN_DIRECT", "CONSUMABLE"]),
+        notes: z.string().optional(),
+        clientRequestId: z.string().optional(),
+      })
+      .parse(req.body);
+    const result = await createPurchase({
+      ...body,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  }),
+);
+
+router.post(
+  "/purchases/:id/payments",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        amount: z.number().positive(),
+        paymentDate: z.string().optional(),
+        paymentMethod: z.string().optional(),
+        notes: z.string().optional(),
+        clientRequestId: z.string().optional(),
+      })
+      .parse(req.body);
+    const result = await addPurchasePayment({
+      purchaseId: Number(req.params.id),
+      ...body,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  }),
+);
+
+router.get(
+  "/purchases/:id/payments",
+  asyncHandler(async (req, res) => {
+    const data = await listPurchasePayments(Number(req.params.id));
+    res.json(data);
+  }),
+);
+
+router.post(
+  "/purchases/:id/void",
+  asyncHandler(async (req, res) => {
+    const body = z.object({ voidReason: z.string().min(1) }).parse(req.body);
+    const result = await voidPurchase({
+      purchaseId: Number(req.params.id),
+      voidedBy: actorOf(req),
+      voidReason: body.voidReason,
+    });
+    res.json(result);
+  }),
+);
+
+// ---- Finance ----
+router.get(
+  "/finance/summary",
+  asyncHandler(async (_req, res) => {
+    res.json(await getFinanceSummary());
+  }),
+);
+
+router.get(
+  "/finance/capital",
+  asyncHandler(async (_req, res) => {
+    res.json(await listCapital());
+  }),
+);
+
+router.post(
+  "/finance/capital",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        entryDate: z.string().optional(),
+        entryType: z.enum(["ADD", "WITHDRAW", "CORRECTION"]),
+        amount: z.number().positive(),
+        notes: z.string().optional(),
+        clientRequestId: z.string().optional(),
+      })
+      .parse(req.body);
+    const result = await postCapital({
+      ...body,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  }),
+);
+
+router.post(
+  "/finance/capital/:id/void",
+  asyncHandler(async (req, res) => {
+    const body = z.object({ voidReason: z.string().min(1) }).parse(req.body);
+    const result = await voidCapital({
+      id: Number(req.params.id),
+      voidedBy: actorOf(req),
+      voidReason: body.voidReason,
+    });
+    res.json(result);
+  }),
+);
+
+router.get(
+  "/finance/income",
+  asyncHandler(async (_req, res) => {
+    res.json(await listIncome());
+  }),
+);
+
+router.post(
+  "/finance/income",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        incomeDate: z.string().optional(),
+        description: z.string().min(1),
+        amount: z.number().positive(),
+        receivedBy: z.string().optional(),
+        notes: z.string().optional(),
+        clientRequestId: z.string().optional(),
+      })
+      .parse(req.body);
+    const result = await postIncome({
+      ...body,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  }),
+);
+
+router.post(
+  "/finance/income/:id/void",
+  asyncHandler(async (req, res) => {
+    const body = z.object({ voidReason: z.string().min(1) }).parse(req.body);
+    res.json(
+      await voidIncome({ id: Number(req.params.id), voidedBy: actorOf(req), voidReason: body.voidReason }),
+    );
+  }),
+);
+
+router.get(
+  "/finance/expenses",
+  asyncHandler(async (_req, res) => {
+    res.json(await listExpenses());
+  }),
+);
+
+router.post(
+  "/finance/expenses",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        expenseDate: z.string().optional(),
+        category: z.string().optional(),
+        description: z.string().min(1),
+        amount: z.number().positive(),
+        paidBy: z.string().optional(),
+        notes: z.string().optional(),
+        clientRequestId: z.string().optional(),
+      })
+      .parse(req.body);
+    const result = await postExpense({
+      ...body,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  }),
+);
+
+router.post(
+  "/finance/expenses/:id/void",
+  asyncHandler(async (req, res) => {
+    const body = z.object({ voidReason: z.string().min(1) }).parse(req.body);
+    res.json(
+      await voidExpense({ id: Number(req.params.id), voidedBy: actorOf(req), voidReason: body.voidReason }),
+    );
   }),
 );
 

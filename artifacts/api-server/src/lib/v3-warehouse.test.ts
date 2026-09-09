@@ -29,8 +29,14 @@ describe("V3 Warehouse ledger", () => {
     process.env.DATABASE_URL = "pglite://.data/gia-v3-test";
     assert.equal(process.env.DATABASE_URL, "pglite://.data/gia-v3-test");
 
-    if (fs.existsSync(TEST_DIR)) {
-      fs.rmSync(TEST_DIR, { recursive: true, force: true });
+    for (let i = 0; i < 5; i++) {
+      try {
+        if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true, force: true });
+        break;
+      } catch (err) {
+        if (i === 4) throw err;
+        await new Promise((r) => setTimeout(r, 250 * (i + 1)));
+      }
     }
 
     // Snapshot prod item count via a one-shot separate init is heavy;
@@ -161,6 +167,7 @@ describe("V3 Warehouse ledger", () => {
 
   it("7-9: zero visible; low only when minimum set; null minimum no fake warning", async () => {
     assert.equal(stockStatus(0, null), "out");
+    assert.equal(stockStatus(-1, null), "unknown");
     assert.equal(stockStatus(4, 5), "low");
     assert.equal(stockStatus(4, null), "available");
     assert.equal(stockStatus(null, 5), "unknown");

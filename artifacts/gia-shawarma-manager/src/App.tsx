@@ -15,6 +15,8 @@ import { V3OpeningPage } from '@/pages/v3/opening';
 import { V3WarehouseInPage } from '@/pages/v3/warehouse-in';
 import { V3WarehouseOutPage } from '@/pages/v3/warehouse-out';
 import { V3KitchenPage } from '@/pages/v3/kitchen';
+import { V3PurchasesPage } from '@/pages/v3/purchases';
+import { V3FinancePage } from '@/pages/v3/finance';
 
 const queryClient = new QueryClient();
 installAuthFetch();
@@ -34,9 +36,13 @@ function AppRouter({ user, onLogout }: { user: AuthUser; onLogout: () => void })
           <Route path="/warehouse" component={() => <V3WarehousePage lang={lang} />} />
           <Route path="/inventory" component={() => <V3WarehousePage lang={lang} />} />
           <Route path="/opening" component={() => <V3OpeningPage lang={lang} />} />
+          <Route path="/opening-balance" component={() => <V3OpeningPage lang={lang} />} />
           <Route path="/warehouse-in" component={() => <V3WarehouseInPage lang={lang} />} />
           <Route path="/warehouse-out" component={() => <V3WarehouseOutPage lang={lang} />} />
+          <Route path="/warehouse-to-kitchen" component={() => <V3WarehouseOutPage lang={lang} />} />
           <Route path="/kitchen" component={() => <V3KitchenPage lang={lang} />} />
+          <Route path="/purchases" component={() => <V3PurchasesPage lang={lang} />} />
+          <Route path="/finance" component={() => <V3FinancePage lang={lang} />} />
           <Route component={NotFound} />
         </Switch>
       </ErrorBoundary>

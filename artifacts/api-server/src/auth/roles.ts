@@ -50,9 +50,10 @@ export function canAccess(role: Role, method: string, path: string): boolean {
 
   if (role === "cashier") {
     // Capital register is owner/manager only (sensitive operational capital)
-    if (write && p.includes("/capital")) return false;
+    if (write && (p.includes("/capital") || p.includes("/finance/capital"))) return false;
     if (p.startsWith("/finance") || p.startsWith("/day-archives")) return true;
-    return !write && (p.startsWith("/dashboard") || p.startsWith("/purchases") || p.startsWith("/recipes"));
+    if (p.startsWith("/v3/purchases") || p.startsWith("/v3/finance")) return true;
+    return !write && (p.startsWith("/dashboard") || p.startsWith("/purchases") || p.startsWith("/recipes") || p.startsWith("/v3"));
   }
 
   return false;

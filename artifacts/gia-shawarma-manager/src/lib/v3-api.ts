@@ -1,4 +1,4 @@
-/** GIA V3 API client — warehouse only (phase 1). */
+/** GIA V3 API client — warehouse + purchases + finance. */
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api/v3${path}`, {
@@ -32,6 +32,28 @@ export type V3WarehouseRow = {
   originalNameRaw?: string | null;
   needsQuantityReview?: boolean;
   needsReview?: boolean;
+  isNegative?: boolean;
+};
+
+export type V3Purchase = {
+  id: number;
+  purchaseDate: string;
+  purchaseTime: string;
+  itemName: string;
+  inventoryItemId: number | null;
+  quantityNumeric: number | null;
+  quantityRaw: string;
+  unitRaw: string;
+  unitPrice: number;
+  totalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  paymentStatus: string;
+  supplier: string;
+  purchasedBy: string;
+  destination: string;
+  notes: string | null;
+  status: string;
 };
 
 export function listV3Warehouse(params: Record<string, string | number | undefined>) {
@@ -85,6 +107,72 @@ export function createV3Item(body: { name: string; category?: string; baseUnit?:
   return api("/warehouse/items", { method: "POST", body: JSON.stringify(body) });
 }
 
+export function listV3Purchases(params: Record<string, string | number | undefined>) {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v != null && v !== "") q.set(k, String(v));
+  });
+  return api<{ rows: V3Purchase[]; total: number; page: number; pageSize: number }>(`/purchases?${q}`);
+}
+
+export function postV3Purchase(body: Record<string, unknown>) {
+  return api("/purchases", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function postV3PurchasePayment(id: number, body: Record<string, unknown>) {
+  return api(`/purchases/${id}/payments`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function voidV3Purchase(id: number, voidReason: string) {
+  return api(`/purchases/${id}/void`, { method: "POST", body: JSON.stringify({ voidReason }) });
+}
+
+export function getV3FinanceSummary() {
+  return api<{
+    netCapital: number;
+    totalIncome: number;
+    totalExpenses: number;
+    totalPurchasePayments: number;
+    available: number;
+  }>("/finance/summary");
+}
+
+export function listV3Capital() {
+  return api<{ rows: Array<Record<string, unknown>> }>("/finance/capital");
+}
+
+export function postV3Capital(body: Record<string, unknown>) {
+  return api("/finance/capital", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function voidV3Capital(id: number, voidReason: string) {
+  return api(`/finance/capital/${id}/void`, { method: "POST", body: JSON.stringify({ voidReason }) });
+}
+
+export function listV3Income() {
+  return api<{ rows: Array<Record<string, unknown>> }>("/finance/income");
+}
+
+export function postV3Income(body: Record<string, unknown>) {
+  return api("/finance/income", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function voidV3Income(id: number, voidReason: string) {
+  return api(`/finance/income/${id}/void`, { method: "POST", body: JSON.stringify({ voidReason }) });
+}
+
+export function listV3Expenses() {
+  return api<{ rows: Array<Record<string, unknown>> }>("/finance/expenses");
+}
+
+export function postV3Expense(body: Record<string, unknown>) {
+  return api("/finance/expenses", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function voidV3Expense(id: number, voidReason: string) {
+  return api(`/finance/expenses/${id}/void`, { method: "POST", body: JSON.stringify({ voidReason }) });
+}
+
 export function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -109,4 +197,16 @@ export function statusLabel(status: V3WarehouseRow["status"], lang: "ar" | "id",
   if (status === "low") return "منخفض";
   if (status === "available") return "متوفر";
   return "بحاجة مراجعة";
+}
+
+export function paymentStatusLabel(s: string, lang: "ar" | "id") {
+  if (s === "PAID") return lang === "id" ? "Lunas" : "مدفوع";
+  if (s === "PARTIAL") return lang === "id" ? "Sebagian" : "مدفوع جزئياً";
+  return lang === "id" ? "Belum bayar" : "غير مدفوع";
+}
+
+export function destinationLabel(s: string, lang: "ar" | "id") {
+  if (s === "WAREHOUSE") return lang === "id" ? "Gudang" : "المستودع";
+  if (s === "KITCHEN_DIRECT") return lang === "id" ? "Dapur langsung" : "المطبخ مباشرة";
+  return lang === "id" ? "Konsumsi" : "شراء عادي / مستهلك";
 }

@@ -106,7 +106,131 @@ export const V3_MOVEMENT_TYPES = [
   "OPENING",
   "WAREHOUSE_IN",
   "WAREHOUSE_TO_KITCHEN",
+  "KITCHEN_DIRECT_IN",
   "ADJUSTMENT",
 ] as const;
 
 export type V3MovementType = (typeof V3_MOVEMENT_TYPES)[number];
+
+/** Purchase destinations — user must choose explicitly. */
+export const V3_PURCHASE_DESTINATIONS = ["WAREHOUSE", "KITCHEN_DIRECT", "CONSUMABLE"] as const;
+export type V3PurchaseDestination = (typeof V3_PURCHASE_DESTINATIONS)[number];
+
+export const V3_PAYMENT_STATUSES = ["PAID", "UNPAID", "PARTIAL"] as const;
+export type V3PaymentStatus = (typeof V3_PAYMENT_STATUSES)[number];
+
+export const v3PurchasesTable = pgTable("v3_purchases", {
+  id: serial("id").primaryKey(),
+  purchaseDate: date("purchase_date", { mode: "string" }).notNull(),
+  purchaseTime: text("purchase_time").notNull().default(""),
+  itemName: text("item_name").notNull(),
+  inventoryItemId: integer("inventory_item_id").references(() => v3InventoryItemsTable.id),
+  quantityNumeric: numeric("quantity_numeric", { precision: 14, scale: 4, mode: "number" }),
+  quantityRaw: text("quantity_raw").notNull().default(""),
+  unitRaw: text("unit_raw").notNull().default(""),
+  unitPrice: numeric("unit_price", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
+  totalAmount: numeric("total_amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  paidAmount: numeric("paid_amount", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
+  paymentStatus: text("payment_status").notNull().default("UNPAID"),
+  supplier: text("supplier").notNull().default(""),
+  purchasedBy: text("purchased_by").notNull().default(""),
+  /** WAREHOUSE | KITCHEN_DIRECT | CONSUMABLE */
+  destination: text("destination").notNull(),
+  notes: text("notes"),
+  movementId: integer("movement_id"),
+  actor: text("actor").notNull().default(""),
+  userId: integer("user_id"),
+  /** active | voided */
+  status: text("status").notNull().default("active"),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: text("voided_by"),
+  voidReason: text("void_reason"),
+  clientRequestId: text("client_request_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (t) => [
+  uniqueIndex("v3_purchases_client_request_uidx").on(t.clientRequestId),
+]);
+
+export const v3PurchasePaymentsTable = pgTable("v3_purchase_payments", {
+  id: serial("id").primaryKey(),
+  purchaseId: integer("purchase_id").notNull().references(() => v3PurchasesTable.id),
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  paymentDate: date("payment_date", { mode: "string" }).notNull(),
+  paymentMethod: text("payment_method").notNull().default("نقداً"),
+  actor: text("actor").notNull().default(""),
+  userId: integer("user_id"),
+  notes: text("notes"),
+  status: text("status").notNull().default("active"),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: text("voided_by"),
+  voidReason: text("void_reason"),
+  clientRequestId: text("client_request_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("v3_purchase_payments_client_request_uidx").on(t.clientRequestId),
+]);
+
+export const v3CapitalTransactionsTable = pgTable("v3_capital_transactions", {
+  id: serial("id").primaryKey(),
+  entryDate: date("entry_date", { mode: "string" }).notNull(),
+  /** ADD | WITHDRAW | CORRECTION */
+  entryType: text("entry_type").notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  actor: text("actor").notNull().default(""),
+  userId: integer("user_id"),
+  notes: text("notes"),
+  status: text("status").notNull().default("active"),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: text("voided_by"),
+  voidReason: text("void_reason"),
+  clientRequestId: text("client_request_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("v3_capital_transactions_client_request_uidx").on(t.clientRequestId),
+]);
+
+export const v3IncomeTable = pgTable("v3_income", {
+  id: serial("id").primaryKey(),
+  incomeDate: date("income_date", { mode: "string" }).notNull(),
+  description: text("description").notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  receivedBy: text("received_by").notNull().default(""),
+  notes: text("notes"),
+  actor: text("actor").notNull().default(""),
+  userId: integer("user_id"),
+  status: text("status").notNull().default("active"),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: text("voided_by"),
+  voidReason: text("void_reason"),
+  clientRequestId: text("client_request_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("v3_income_client_request_uidx").on(t.clientRequestId),
+]);
+
+export const v3ExpensesTable = pgTable("v3_expenses", {
+  id: serial("id").primaryKey(),
+  expenseDate: date("expense_date", { mode: "string" }).notNull(),
+  category: text("category").notNull().default(""),
+  description: text("description").notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  paidBy: text("paid_by").notNull().default(""),
+  notes: text("notes"),
+  actor: text("actor").notNull().default(""),
+  userId: integer("user_id"),
+  status: text("status").notNull().default("active"),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: text("voided_by"),
+  voidReason: text("void_reason"),
+  clientRequestId: text("client_request_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("v3_expenses_client_request_uidx").on(t.clientRequestId),
+]);
+
+export type V3Purchase = typeof v3PurchasesTable.$inferSelect;
+export type V3PurchasePayment = typeof v3PurchasePaymentsTable.$inferSelect;
+export type V3CapitalTransaction = typeof v3CapitalTransactionsTable.$inferSelect;
+export type V3Income = typeof v3IncomeTable.$inferSelect;
+export type V3Expense = typeof v3ExpensesTable.$inferSelect;

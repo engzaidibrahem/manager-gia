@@ -43,7 +43,9 @@ export function stockStatus(
   minimumStock: number | null | undefined,
 ): "available" | "low" | "out" | "unknown" {
   if (warehouseQty == null) return "unknown";
-  if (warehouseQty <= 0) return "out";
+  /** Historical negatives must not look like normal "out of stock". */
+  if (warehouseQty < 0) return "unknown";
+  if (warehouseQty === 0) return "out";
   if (minimumStock != null && Number.isFinite(minimumStock) && warehouseQty <= minimumStock) return "low";
   return "available";
 }
@@ -65,10 +67,12 @@ export async function recomputeItemBalances(tx: DbTx | typeof db, itemId: number
   let opening = 0;
   let inn = 0;
   let out = 0;
+  let kitchenDirect = 0;
   let adj = 0;
   let hasNullOpening = false;
   let hasNumericOpening = false;
-  let hasNumericInOutAdj = false;
+  let hasNumericWhLedger = false;
+  let hasNumericKitchen = false;
 
   for (const r of rows) {
     if (r.movementType === "OPENING") {
@@ -81,22 +85,32 @@ export async function recomputeItemBalances(tx: DbTx | typeof db, itemId: number
       continue;
     }
     if (r.quantityNumeric == null) continue;
-    hasNumericInOutAdj = true;
     const q = Number(r.quantityNumeric);
-    if (r.movementType === "WAREHOUSE_IN") inn += q;
-    else if (r.movementType === "WAREHOUSE_TO_KITCHEN") out += q;
-    else if (r.movementType === "ADJUSTMENT") adj += q;
+    if (r.movementType === "WAREHOUSE_IN") {
+      hasNumericWhLedger = true;
+      inn += q;
+    } else if (r.movementType === "WAREHOUSE_TO_KITCHEN") {
+      hasNumericWhLedger = true;
+      hasNumericKitchen = true;
+      out += q;
+    } else if (r.movementType === "KITCHEN_DIRECT_IN") {
+      hasNumericKitchen = true;
+      kitchenDirect += q;
+    } else if (r.movementType === "ADJUSTMENT") {
+      hasNumericWhLedger = true;
+      adj += q;
+    }
   }
 
   /** Never invent warehouse balance when opening is non-numeric (would fake negatives). */
   let warehouse: number | null = null;
   if (hasNullOpening) {
     warehouse = null;
-  } else if (hasNumericOpening || hasNumericInOutAdj) {
+  } else if (hasNumericOpening || hasNumericWhLedger) {
     warehouse = opening + inn - out + adj;
   }
 
-  const kitchen = out;
+  const kitchen = hasNumericKitchen || out > 0 || kitchenDirect > 0 ? out + kitchenDirect : 0;
 
   const needsQuantityReview = hasNullOpening;
 
@@ -217,13 +231,14 @@ export async function listWarehouseSummary(opts: {
     const t = totMap.get(item.id) || { opening: 0, totalIn: 0, totalOut: 0 };
     const op = openingRaw.get(item.id);
     const needsQuantityReview = Boolean(item.needsQuantityReview);
-    const needsReview = Boolean(item.needsReview) || needsQuantityReview;
-    const current = needsQuantityReview || item.warehouseQtyNumeric == null
-      ? null
-      : Number(item.warehouseQtyNumeric);
-    const status = needsQuantityReview
-      ? ("unknown" as const)
-      : stockStatus(current, item.minimumStock == null ? null : Number(item.minimumStock));
+    const cached = item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric);
+    const isNegative = cached != null && cached < 0;
+    const needsReview = Boolean(item.needsReview) || needsQuantityReview || isNegative;
+    const current = needsQuantityReview ? null : cached;
+    const status =
+      needsQuantityReview || isNegative
+        ? ("unknown" as const)
+        : stockStatus(current, item.minimumStock == null ? null : Number(item.minimumStock));
     return {
       id: item.id,
       name: item.name,
@@ -244,6 +259,7 @@ export async function listWarehouseSummary(opts: {
       originalNameRaw: item.originalNameRaw,
       needsQuantityReview,
       needsReview,
+      isNegative,
     };
   });
 
@@ -398,6 +414,24 @@ export async function postWarehouseToKitchen(input: {
   return postMovement("WAREHOUSE_TO_KITCHEN", input);
 }
 
+/** Direct kitchen receipt — does NOT touch warehouse stock. */
+export async function postKitchenDirectIn(input: {
+  inventoryItemId: number;
+  movementDate?: string;
+  quantityNumeric?: number | null;
+  quantityRaw: string;
+  unitRaw?: string;
+  supplier?: string;
+  notes?: string;
+  actor: string;
+  userId?: number | null;
+  purchaseId?: number | null;
+  clientRequestId?: string;
+  batchKey?: string;
+}) {
+  return postMovement("KITCHEN_DIRECT_IN", input);
+}
+
 async function postMovement(
   movementType: V3MovementType,
   input: {
@@ -462,7 +496,11 @@ async function postMovement(
       }
     }
 
-    if (movementType === "WAREHOUSE_IN" && qtyNum != null && !(qtyNum > 0)) {
+    if (
+      (movementType === "WAREHOUSE_IN" || movementType === "KITCHEN_DIRECT_IN") &&
+      qtyNum != null &&
+      !(qtyNum > 0)
+    ) {
       throw new AppError("VALIDATION_ERROR", "الكمية يجب أن تكون أكبر من صفر");
     }
 
@@ -612,7 +650,31 @@ export async function listKitchenStock() {
     });
 }
 
-/** Mobile-ready: get item by QR token without building QR UI. */
+export async function voidMovement(input: {
+  movementId: number;
+  voidedBy: string;
+  voidReason: string;
+}) {
+  return db.transaction(async (tx) => {
+    const mov = await tx.query.v3WarehouseMovementsTable.findFirst({
+      where: eq(v3WarehouseMovementsTable.id, input.movementId),
+    });
+    if (!mov) throw new AppError("MOVEMENT_NOT_FOUND", "الحركة غير موجودة", 404);
+    if (mov.status === "voided") return { idempotent: true as const, movement: mov };
+    const [updated] = await tx
+      .update(v3WarehouseMovementsTable)
+      .set({
+        status: "voided",
+        voidedAt: new Date(),
+        voidedBy: input.voidedBy,
+        voidReason: input.voidReason,
+      })
+      .where(eq(v3WarehouseMovementsTable.id, input.movementId))
+      .returning();
+    await recomputeItemBalances(tx, mov.inventoryItemId);
+    return { idempotent: false as const, movement: updated };
+  });
+}
 export async function getItemByQr(qrToken: string) {
   const item = await db.query.v3InventoryItemsTable.findFirst({
     where: eq(v3InventoryItemsTable.qrToken, qrToken),

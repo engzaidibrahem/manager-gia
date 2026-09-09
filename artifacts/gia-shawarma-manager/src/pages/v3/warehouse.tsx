@@ -84,17 +84,20 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
             ) : rows.length === 0 ? (
               <tr><td colSpan={9} className="px-3 py-8 text-center text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Belum ada data." : "لا بيانات بعد."}</td></tr>
             ) : rows.map((r) => {
+              const isNeg = Boolean(r.isNegative) || (r.currentWarehouse != null && r.currentWarehouse < 0);
               const qtyReview = Boolean(r.needsQuantityReview) || r.currentWarehouse == null;
-              const flagged = Boolean(r.needsReview || r.needsQuantityReview);
-              const rowClass = qtyReview
-                ? "bg-amber-50/60"
-                : r.status === "out"
-                  ? "bg-red-50/80"
-                  : r.status === "low"
-                    ? "bg-orange-50/70"
-                    : flagged
-                      ? "bg-amber-50/30"
-                      : "";
+              const flagged = Boolean(r.needsReview || r.needsQuantityReview || isNeg);
+              const rowClass = isNeg
+                ? "bg-rose-100/90"
+                : qtyReview
+                  ? "bg-amber-50/60"
+                  : r.status === "out"
+                    ? "bg-red-50/80"
+                    : r.status === "low"
+                      ? "bg-orange-50/70"
+                      : flagged
+                        ? "bg-amber-50/30"
+                        : "";
               return (
                 <tr key={r.id} className={`border-b border-[hsl(var(--border)/.5)] ${rowClass}`}>
                   <td className="px-3 py-2.5 text-xs text-[hsl(var(--muted-foreground))]">
@@ -125,14 +128,21 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
                           </div>
                         ) : null}
                       </div>
+                    ) : isNeg ? (
+                      <div>
+                        <div className="text-rose-800">{r.currentWarehouse}</div>
+                        <div className="mt-0.5 text-[10px] font-bold text-rose-900">
+                          {lang === "id" ? "Perlu review (negatif)" : "بحاجة مراجعة (سالب)"}
+                        </div>
+                      </div>
                     ) : (
                       r.currentWarehouse
                     )}
                   </td>
                   <td className="px-3 py-2.5 font-mono">{r.minimumStock ?? "—"}</td>
                   <td className="px-3 py-2.5 text-xs font-bold">
-                    {statusText(r.status, qtyReview)}
-                    {flagged && !qtyReview ? (
+                    {statusText(r.status, qtyReview || isNeg)}
+                    {flagged && !qtyReview && !isNeg ? (
                       <div className="mt-0.5 text-[10px] font-bold text-amber-800">
                         {lang === "id" ? "ditandai review" : "معلّم للمراجعة"}
                       </div>
