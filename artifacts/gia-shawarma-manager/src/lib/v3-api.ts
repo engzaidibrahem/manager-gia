@@ -1,16 +1,80 @@
-/** GIA V3 API client — warehouse + purchases + finance. */
+/** GIA V3 API client — warehouse + purchases + finance + employees. */
+import { customFetch } from "@workspace/api-client-react";
 
+type ApiErrLike = {
+  status: number;
+  data?: { message?: string; error?: string; code?: string } | null;
+  message?: string;
+};
+
+function isApiErr(err: unknown): err is ApiErrLike {
+  return Boolean(
+    err &&
+      typeof err === "object" &&
+      "status" in err &&
+      typeof (err as { status: unknown }).status === "number",
+  );
+}
+
+/**
+ * All V3 calls must use the same auth mechanism as the rest of the app:
+ * customFetch + Authorization: Bearer <localStorage token>.
+ * Raw fetch with credentials:include alone is NOT enough — login stores JWT
+ * in localStorage and does not set an auth cookie.
+ */
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api/v3${path}`, {
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
-    ...init,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error((data as { message?: string }).message || `HTTP ${res.status}`);
+  try {
+    return await customFetch<T>(`/api/v3${path}`, {
+      credentials: "include",
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers || {}),
+      },
+    });
+  } catch (err) {
+    throw new Error(friendlyV3Error(err));
   }
-  return data as T;
+}
+
+/** Map auth / API failures to clear Arabic messages for restaurant staff. */
+export function friendlyV3Error(err: unknown): string {
+  if (isApiErr(err)) {
+    const status = err.status;
+    const data = err.data ?? null;
+    const serverMsg = (data?.message || "").trim();
+    const serverErr = (data?.error || "").trim();
+
+    if (status === 401) {
+      return "انتهت جلسة تسجيل الدخول، يرجى تسجيل الدخول مرة أخرى.";
+    }
+    if (status === 403 || serverErr === "UNAUTHORIZED_OPERATION" || data?.code === "UNAUTHORIZED_OPERATION") {
+      return "ليس لديك صلاحية لتنفيذ هذه العملية.";
+    }
+    if (serverMsg) return serverMsg;
+    if (
+      serverErr &&
+      !/^HTTP\b/i.test(serverErr) &&
+      serverErr !== "Authentication required" &&
+      serverErr !== "Invalid or expired token"
+    ) {
+      return serverErr;
+    }
+    return serverMsg || "حدث خطأ أثناء تنفيذ العملية.";
+  }
+  if (err instanceof Error) {
+    if (/^HTTP\s*401\b/i.test(err.message) || /Authentication required|Invalid or expired token/i.test(err.message)) {
+      return "انتهت جلسة تسجيل الدخول، يرجى تسجيل الدخول مرة أخرى.";
+    }
+    if (/^HTTP\s*403\b/i.test(err.message) || /Forbidden|permission/i.test(err.message)) {
+      return "ليس لديك صلاحية لتنفيذ هذه العملية.";
+    }
+    if (/^HTTP\s*\d+/i.test(err.message)) {
+      return "حدث خطأ أثناء تنفيذ العملية.";
+    }
+    return err.message;
+  }
+  return "حدث خطأ أثناء تنفيذ العملية.";
 }
 
 export type V3WarehouseRow = {
