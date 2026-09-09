@@ -15,6 +15,7 @@ import { Flash, PageTitle } from "@/components/layout";
 import {
   destinationLabel,
   listV3Items,
+  listV3PurchasePayments,
   listV3Purchases,
   newClientRequestId,
   paymentStatusLabel,
@@ -38,6 +39,7 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [payFor, setPayFor] = useState<V3Purchase | null>(null);
+  const [detail, setDetail] = useState<V3Purchase | null>(null);
   const [flash, setFlash] = useState("");
   const [error, setError] = useState("");
 
@@ -201,19 +203,25 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
               <th className="px-3 py-3 text-start">{lang === "id" ? "Oleh" : "من قام بالشراء"}</th>
               <th className="px-3 py-3 text-start">{lang === "id" ? "Tujuan" : "الوجهة"}</th>
               <th className="px-3 py-3 text-start">{lang === "id" ? "Bayar" : "حالة الدفع"}</th>
+              <th className="px-3 py-3 text-start">{lang === "id" ? "Dibayar" : "المدفوع"}</th>
+              <th className="px-3 py-3 text-start">{lang === "id" ? "Sisa" : "المتبقي"}</th>
               <th className="px-3 py-3 text-start">{lang === "id" ? "Catatan" : "ملاحظات"}</th>
               <th className="px-3 py-3 text-start">{lang === "id" ? "Aksi" : "إجراءات"}</th>
             </tr>
           </thead>
           <tbody>
             {query.isLoading ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center">…</td></tr>
+              <tr><td colSpan={14} className="px-3 py-8 text-center">…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Belum ada." : "لا بيانات بعد."}</td></tr>
+              <tr><td colSpan={14} className="px-3 py-8 text-center text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Belum ada pembelian." : "لا توجد مشتريات بعد."}</td></tr>
             ) : rows.map((r) => (
               <tr key={r.id} className="border-b border-[hsl(var(--border)/.5)]">
                 <td className="px-3 py-2.5 font-mono text-xs">{r.purchaseDate}</td>
-                <td className="px-3 py-2.5 font-semibold">{r.itemName}</td>
+                <td className="px-3 py-2.5 font-semibold">
+                  <button type="button" className="text-start text-[hsl(var(--primary))] hover:underline" onClick={() => setDetail(r)}>
+                    {r.itemName}
+                  </button>
+                </td>
                 <td className="px-3 py-2.5 font-mono">{r.quantityNumeric ?? r.quantityRaw}</td>
                 <td className="px-3 py-2.5">{r.unitRaw || "—"}</td>
                 <td className="px-3 py-2.5 font-mono text-xs">{formatIDR(r.unitPrice)}</td>
@@ -221,20 +229,24 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
                 <td className="px-3 py-2.5">{r.supplier || "—"}</td>
                 <td className="px-3 py-2.5">{r.purchasedBy || "—"}</td>
                 <td className="px-3 py-2.5 text-xs">{destinationLabel(r.destination, lang === "id" ? "id" : "ar")}</td>
-                <td className="px-3 py-2.5 text-xs">
-                  <div className="font-bold">{paymentStatusLabel(r.paymentStatus, lang === "id" ? "id" : "ar")}</div>
-                  <div className="text-[10px] text-[hsl(var(--muted-foreground))]">{formatIDR(r.paidAmount)} / {formatIDR(r.totalAmount)}</div>
-                </td>
+                <td className="px-3 py-2.5 text-xs font-bold">{paymentStatusLabel(r.paymentStatus, lang === "id" ? "id" : "ar")}</td>
+                <td className="px-3 py-2.5 font-mono text-xs">{formatIDR(r.paidAmount)}</td>
+                <td className="px-3 py-2.5 font-mono text-xs">{formatIDR(r.remainingAmount)}</td>
                 <td className="px-3 py-2.5 text-xs">{r.notes || "—"}</td>
                 <td className="px-3 py-2.5">
                   <div className="flex flex-wrap gap-1">
+                    <SecondaryButton className="!px-2 !py-1 text-[11px]" onClick={() => setDetail(r)}>
+                      {lang === "id" ? "Detail" : "عرض"}
+                    </SecondaryButton>
                     {r.paymentStatus !== "PAID" ? (
                       <SecondaryButton className="!px-2 !py-1 text-[11px]" onClick={() => setPayFor(r)}>
                         {lang === "id" ? "Bayar" : "دفع"}
                       </SecondaryButton>
                     ) : null}
                     <SecondaryButton className="!px-2 !py-1 text-[11px]" onClick={() => {
-                      if (confirm(lang === "id" ? "Batalkan pembelian?" : "إلغاء هذه المشتريات؟")) voidMut.mutate(r.id);
+                      if (confirm(lang === "id"
+                        ? "Batalkan pembelian? Stok terkait akan dibatalkan jika aman."
+                        : "إلغاء هذه المشتريات؟ سيتم عكس حركة المخزون المرتبطة إن أمكن، وستُلغى الدفعات.")) voidMut.mutate(r.id);
                     }}>
                       {lang === "id" ? "Batal" : "إلغاء"}
                     </SecondaryButton>
@@ -380,7 +392,65 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
           pending={payMut.isPending}
         />
       ) : null}
+
+      {detail ? (
+        <PurchaseDetailModal lang={lang} purchase={detail} onClose={() => setDetail(null)} />
+      ) : null}
     </div>
+  );
+}
+
+function PurchaseDetailModal({ lang, purchase, onClose }: { lang: Lang; purchase: V3Purchase; onClose: () => void }) {
+  const pays = useQuery({
+    queryKey: ["v3-purchase-pays", purchase.id],
+    queryFn: () => listV3PurchasePayments(purchase.id),
+  });
+  return (
+    <Modal title={lang === "id" ? "Detail pembelian" : "تفاصيل المشتريات"} onClose={onClose}>
+      <div className="mb-4 grid gap-2 text-sm sm:grid-cols-2">
+        <div><span className="text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Tanggal" : "التاريخ"}: </span>{purchase.purchaseDate} {purchase.purchaseTime}</div>
+        <div><span className="text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Bahan" : "المادة / الغرض"}: </span><b>{purchase.itemName}</b></div>
+        <div><span className="text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Qty" : "الكمية"}: </span>{purchase.quantityNumeric ?? purchase.quantityRaw} {purchase.unitRaw}</div>
+        <div><span className="text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Harga" : "سعر الوحدة"}: </span>{formatIDR(purchase.unitPrice)}</div>
+        <div><span className="text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Total" : "الإجمالي"}: </span><b>{formatIDR(purchase.totalAmount)}</b></div>
+        <div><span className="text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Supplier" : "المورد"}: </span>{purchase.supplier || "—"}</div>
+        <div><span className="text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Oleh" : "من قام بالشراء"}: </span>{purchase.purchasedBy || "—"}</div>
+        <div><span className="text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Tujuan" : "الوجهة"}: </span>{destinationLabel(purchase.destination, lang === "id" ? "id" : "ar")}</div>
+        <div><span className="text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Status" : "حالة الدفع"}: </span>{paymentStatusLabel(purchase.paymentStatus, lang === "id" ? "id" : "ar")}</div>
+        <div><span className="text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Dibayar" : "المدفوع"}: </span>{formatIDR(purchase.paidAmount)}</div>
+        <div><span className="text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Sisa" : "المتبقي"}: </span>{formatIDR(purchase.remainingAmount)}</div>
+        <div className="sm:col-span-2"><span className="text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Catatan" : "ملاحظات"}: </span>{purchase.notes || "—"}</div>
+      </div>
+      <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+        {lang === "id" ? "Riwayat pembayaran" : "سجل الدفعات"}
+      </h3>
+      <div className="overflow-auto rounded-lg border border-[hsl(var(--border))]">
+        <table className="w-full text-sm">
+          <thead className="bg-[hsl(var(--muted))] text-[11px]">
+            <tr>
+              <th className="px-2 py-2 text-start">{lang === "id" ? "Tanggal" : "التاريخ"}</th>
+              <th className="px-2 py-2 text-start">{lang === "id" ? "Jumlah" : "المبلغ"}</th>
+              <th className="px-2 py-2 text-start">{lang === "id" ? "Oleh" : "بواسطة"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(pays.data?.rows ?? []).map((p) => (
+              <tr key={String(p.id)} className="border-t border-[hsl(var(--border))]">
+                <td className="px-2 py-2">{String(p.paymentDate)}</td>
+                <td className="px-2 py-2 font-mono">{formatIDR(Number(p.amount))}</td>
+                <td className="px-2 py-2">{String(p.actor || "—")}</td>
+              </tr>
+            ))}
+            {!pays.data?.rows?.length ? (
+              <tr><td colSpan={3} className="px-2 py-4 text-center text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Belum ada pembayaran" : "لا دفعات بعد"}</td></tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-3 flex justify-end">
+        <SecondaryButton onClick={onClose}>{lang === "id" ? "Tutup" : "إغلاق"}</SecondaryButton>
+      </div>
+    </Modal>
   );
 }
 

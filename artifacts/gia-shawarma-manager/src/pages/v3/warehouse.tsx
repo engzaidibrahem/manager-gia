@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { PageHint, SecondaryButton, SelectInput, TextInput } from "@/components/FormKit";
 import { Flash, PageTitle } from "@/components/layout";
 import { listV3Warehouse, statusLabel, type V3WarehouseRow } from "@/lib/v3-api";
 import { type Lang } from "@/lib/i18n";
+import { EmptyState, StatusBadge } from "./v3-ui";
 
 export function V3WarehousePage({ lang }: { lang: Lang }) {
   const [q, setQ] = useState("");
@@ -54,8 +56,8 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
           <option value="">{lang === "id" ? "Semua kategori" : "كل التصنيفات"}</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </SelectInput>
-        <SelectInput className="max-w-[160px]" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
-          <option value="all">{lang === "id" ? "Semua status" : "كل الحالات"}</option>
+        <SelectInput className="max-w-[180px]" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
+          <option value="all">{lang === "id" ? "Semua status" : "الكل"}</option>
           <option value="available">{lang === "id" ? "Tersedia" : "متوفر"}</option>
           <option value="low">{lang === "id" ? "Rendah" : "منخفض"}</option>
           <option value="out">{lang === "id" ? "Habis" : "نفد"}</option>
@@ -82,7 +84,11 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
             {query.isLoading ? (
               <tr><td colSpan={9} className="px-3 py-8 text-center text-[hsl(var(--muted-foreground))]">…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Belum ada data." : "لا بيانات بعد."}</td></tr>
+              <tr>
+                <td colSpan={9}>
+                  <EmptyState message={lang === "id" ? "Belum ada data gudang." : "لا بيانات مستودع بعد."} />
+                </td>
+              </tr>
             ) : rows.map((r) => {
               const isNeg = Boolean(r.isNegative) || (r.currentWarehouse != null && r.currentWarehouse < 0);
               const qtyReview = Boolean(r.needsQuantityReview) || r.currentWarehouse == null;
@@ -100,17 +106,11 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
                         : "";
               return (
                 <tr key={r.id} className={`border-b border-[hsl(var(--border)/.5)] ${rowClass}`}>
-                  <td className="px-3 py-2.5 text-xs text-[hsl(var(--muted-foreground))]">
-                    {r.category || "—"}
-                    {r.sourceType === "MOVEMENT_CREATED_UNMAPPED" ? (
-                      <div className="mt-0.5 text-[10px] font-bold text-amber-800">unmapped</div>
-                    ) : null}
-                  </td>
+                  <td className="px-3 py-2.5 text-xs text-[hsl(var(--muted-foreground))]">{r.category || "—"}</td>
                   <td className="px-3 py-2.5 font-semibold">
-                    {r.name}
-                    {r.sourceExcelRow != null ? (
-                      <div className="mt-0.5 text-[10px] font-normal text-[hsl(var(--muted-foreground))]">Excel#{r.sourceExcelRow}</div>
-                    ) : null}
+                    <Link href={`/warehouse/${r.id}`} className="text-[hsl(var(--primary))] hover:underline">
+                      {r.name}
+                    </Link>
                   </td>
                   <td className="px-3 py-2.5">{r.baseUnit || r.openingUnitRaw || "—"}</td>
                   <td className="px-3 py-2.5 font-mono text-xs">
@@ -119,34 +119,24 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
                   <td className="px-3 py-2.5 font-mono">{r.totalIn}</td>
                   <td className="px-3 py-2.5 font-mono">{r.totalOut}</td>
                   <td className="px-3 py-2.5 font-mono font-bold">
-                    {qtyReview ? (
+                    {qtyReview || isNeg ? (
                       <div>
-                        <div className="text-amber-900">{lang === "id" ? "Perlu review" : "بحاجة مراجعة"}</div>
-                        {r.openingRaw && r.openingRaw !== "—" ? (
-                          <div className="mt-0.5 text-[10px] font-normal text-[hsl(var(--muted-foreground))]">
-                            {lang === "id" ? "Asli: " : "الأصلي: "}{r.openingRaw}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : isNeg ? (
-                      <div>
-                        <div className="text-rose-800">{r.currentWarehouse}</div>
-                        <div className="mt-0.5 text-[10px] font-bold text-rose-900">
-                          {lang === "id" ? "Perlu review (negatif)" : "بحاجة مراجعة (سالب)"}
+                        <div className={isNeg ? "text-rose-800" : "text-amber-900"}>
+                          {isNeg ? r.currentWarehouse : (lang === "id" ? "Perlu review" : "بحاجة مراجعة")}
                         </div>
+                        {r.reviewReason ? (
+                          <div className="mt-0.5 text-[10px] font-normal text-amber-900">{r.reviewReason}</div>
+                        ) : null}
                       </div>
                     ) : (
                       r.currentWarehouse
                     )}
                   </td>
                   <td className="px-3 py-2.5 font-mono">{r.minimumStock ?? "—"}</td>
-                  <td className="px-3 py-2.5 text-xs font-bold">
-                    {statusText(r.status, qtyReview || isNeg)}
-                    {flagged && !qtyReview && !isNeg ? (
-                      <div className="mt-0.5 text-[10px] font-bold text-amber-800">
-                        {lang === "id" ? "ditandai review" : "معلّم للمراجعة"}
-                      </div>
-                    ) : null}
+                  <td className="px-3 py-2.5">
+                    <StatusBadge tone={qtyReview || isNeg ? "review" : r.status === "out" ? "danger" : r.status === "low" ? "warn" : "ok"}>
+                      {statusText(r.status, qtyReview || isNeg)}
+                    </StatusBadge>
                   </td>
                 </tr>
               );

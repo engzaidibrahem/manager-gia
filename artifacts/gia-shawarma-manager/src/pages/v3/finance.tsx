@@ -50,8 +50,8 @@ export function V3FinancePage({ lang }: { lang: Lang }) {
         eyebrow="GIA V3"
         title={lang === "id" ? "Keuangan" : "المالية"}
         description={lang === "id"
-          ? "Buku uang sederhana restoran — bukan ERP."
-          : "دفتر مالي بسيط للمطعم — ليس نظام محاسبة ERP."}
+          ? "Buku uang sederhana untuk restoran."
+          : "دفتر مالي بسيط للمطعم."}
       />
       <PageHint>
         {lang === "id"
@@ -59,13 +59,21 @@ export function V3FinancePage({ lang }: { lang: Lang }) {
           : "الرصيد المتاح = رأس المال + الدخل − المصروفات − مدفوعات المشتريات − الرواتب المدفوعة."}
       </PageHint>
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-4 rounded-xl border-2 border-[hsl(var(--primary))] bg-[hsl(var(--primary)/.08)] px-4 py-4">
+        <div className="text-[11px] font-bold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+          {lang === "id" ? "Saldo tersedia" : "الرصيد المتاح"}
+        </div>
+        <div className="mt-1 text-3xl font-bold tabular-nums text-[hsl(var(--primary))]">
+          {formatIDR(s?.available ?? 0)}
+        </div>
+      </div>
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Metric label={lang === "id" ? "Modal" : "رأس المال"} value={formatIDR(s?.netCapital ?? 0)} />
         <Metric label={lang === "id" ? "Pemasukan" : "الدخل"} value={formatIDR(s?.totalIncome ?? 0)} />
         <Metric label={lang === "id" ? "Pengeluaran" : "المصروفات"} value={formatIDR(s?.totalExpenses ?? 0)} />
         <Metric label={lang === "id" ? "Bayar pembelian" : "المشتريات المدفوعة"} value={formatIDR(s?.totalPurchasePayments ?? 0)} />
         <Metric label={lang === "id" ? "Gaji dibayar" : "الرواتب المدفوعة"} value={formatIDR(s?.totalSalaryPayments ?? 0)} />
-        <Metric label={lang === "id" ? "Saldo tersedia" : "الرصيد المتاح"} value={formatIDR(s?.available ?? 0)} emphasize />
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">

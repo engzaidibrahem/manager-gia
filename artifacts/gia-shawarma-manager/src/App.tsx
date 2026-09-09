@@ -20,6 +20,7 @@ import { V3FinancePage } from '@/pages/v3/finance';
 import { V3EmployeesPage } from '@/pages/v3/employees';
 import { V3EmployeeDetailPage } from '@/pages/v3/employee-detail';
 import { V3AttendancePage } from '@/pages/v3/attendance';
+import { V3ItemDetailPage } from '@/pages/v3/item-detail';
 
 const queryClient = new QueryClient();
 installAuthFetch();
@@ -36,6 +37,7 @@ function AppRouter({ user, onLogout }: { user: AuthUser; onLogout: () => void })
       <ErrorBoundary resetKey={location.pathname}>
         <Switch>
           <Route path="/" component={() => <V3SummaryPage lang={lang} />} />
+          <Route path="/warehouse/:id" component={() => <V3ItemDetailPage lang={lang} />} />
           <Route path="/warehouse" component={() => <V3WarehousePage lang={lang} />} />
           <Route path="/inventory" component={() => <V3WarehousePage lang={lang} />} />
           <Route path="/opening" component={() => <V3OpeningPage lang={lang} />} />

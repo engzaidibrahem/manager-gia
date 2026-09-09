@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   createItem,
   getItemByQr,
+  getWarehouseItemDetail,
   listItemsBrief,
   listKitchenStock,
   listMovements,
@@ -227,10 +228,16 @@ router.get(
   "/items/:id/balance",
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    const summary = await listWarehouseSummary({ page: 1, pageSize: 500 });
-    const row = summary.rows.find((r) => r.id === id);
-    if (!row) throw new AppError("ITEM_NOT_FOUND", "المادة غير موجودة", 404);
-    res.json(row);
+    const detail = await getWarehouseItemDetail(id);
+    res.json(detail);
+  }),
+);
+
+router.get(
+  "/warehouse/items/:id",
+  asyncHandler(async (req, res) => {
+    const detail = await getWarehouseItemDetail(Number(req.params.id));
+    res.json(detail);
   }),
 );
 

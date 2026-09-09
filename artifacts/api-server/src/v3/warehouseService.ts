@@ -239,6 +239,21 @@ export async function listWarehouseSummary(opts: {
       needsQuantityReview || isNegative
         ? ("unknown" as const)
         : stockStatus(current, item.minimumStock == null ? null : Number(item.minimumStock));
+
+    let reviewReason: string | null = null;
+    if (isNegative) reviewReason = "رصيد تاريخي سالب";
+    else if (needsQuantityReview && (op?.quantityNumeric == null) && op?.quantityRaw && op.quantityRaw !== "—") {
+      reviewReason = "كمية افتتاح غير واضحة";
+    } else if (needsQuantityReview || current == null) {
+      if (item.sourceType === "MOVEMENT_CREATED_UNMAPPED") {
+        reviewReason = "حركة تاريخية بدون رصيد افتتاح رقمي";
+      } else {
+        reviewReason = "رصيد غير قابل للحساب";
+      }
+    } else if (item.needsReview) {
+      reviewReason = "حركة تاريخية بدون رصيد افتتاح رقمي";
+    }
+
     return {
       id: item.id,
       name: item.name,
@@ -260,6 +275,7 @@ export async function listWarehouseSummary(opts: {
       needsQuantityReview,
       needsReview,
       isNegative,
+      reviewReason,
     };
   });
 
@@ -273,6 +289,15 @@ export async function listWarehouseSummary(opts: {
   const categories = [...new Set(all.map((i) => i.category).filter(Boolean))].sort();
 
   return { rows: pageRows, total, page, pageSize, categories };
+}
+
+/** Single-item warehouse detail + permanent movement history (newest first). */
+export async function getWarehouseItemDetail(itemId: number) {
+  const summary = await listWarehouseSummary({ page: 1, pageSize: 5000 });
+  const item = summary.rows.find((r) => r.id === itemId);
+  if (!item) throw new AppError("ITEM_NOT_FOUND", "المادة غير موجودة", 404);
+  const moves = await listMovements({ inventoryItemId: itemId, page: 1, pageSize: 500 });
+  return { item, movements: moves.rows };
 }
 
 export async function postOpeningBalance(input: {
@@ -321,6 +346,26 @@ export async function postOpeningBalance(input: {
     }
 
     const resolvedItemId = itemId as number;
+
+    // Prevent accidental duplicate opening for the same item (normal operation).
+    const priorOpening = await tx
+      .select()
+      .from(v3WarehouseMovementsTable)
+      .where(
+        and(
+          eq(v3WarehouseMovementsTable.inventoryItemId, resolvedItemId),
+          eq(v3WarehouseMovementsTable.movementType, "OPENING"),
+          eq(v3WarehouseMovementsTable.status, "active"),
+        ),
+      )
+      .limit(1);
+    if (priorOpening.length > 0) {
+      throw new AppError(
+        "CONFLICT",
+        "هذه المادة لديها رصيد افتتاح مسبقاً. لا تُنشئ افتتاحاً مكرراً — استخدم الإدخال للمستودع لإضافة كمية.",
+        409,
+      );
+    }
 
     const qtyRaw = String(input.quantityRaw ?? "").trim();
     if (!qtyRaw) throw new AppError("VALIDATION_ERROR", "الكمية مطلوبة");
@@ -371,7 +416,8 @@ export async function postOpeningBalance(input: {
       .where(eq(v3OpeningBalancesTable.id, opening.id));
 
     const balances = await recomputeItemBalances(tx, resolvedItemId);
-    return { idempotent: false as const, opening, movement, balances, itemId: resolvedItemId };  };
+    return { idempotent: false as const, opening, movement, balances, itemId: resolvedItemId };
+  };
 
   return db.transaction(async (tx) => run(tx));
 }

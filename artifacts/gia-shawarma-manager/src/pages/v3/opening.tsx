@@ -36,7 +36,13 @@ export function V3OpeningPage({ lang }: { lang: Lang }) {
   async function save() {
     setSaving(true);
     try {
-      const qtyNum = parseStrictNumeric(qtyRaw);
+      if (itemId !== "") {
+        const selected = (items.data?.rows ?? []).find((i) => i.id === Number(itemId));
+        // Client-side hint: if warehouse already has opening-like stock history, API will also reject.
+        if (selected && selected.warehouseQtyNumeric != null) {
+          // Still attempt — server enforces duplicate OPENING. Show Arabic if known.
+        }
+      }
       await postV3Opening({
         inventoryItemId: itemId === "" ? undefined : Number(itemId),
         name: itemId === "" ? name : undefined,
@@ -44,14 +50,14 @@ export function V3OpeningPage({ lang }: { lang: Lang }) {
         baseUnit: unit,
         balanceDate: date,
         quantityRaw: qtyRaw,
-        quantityNumeric: qtyNum,
+        quantityNumeric: parseStrictNumeric(qtyRaw),
         unitRaw: unit,
         notes: notes || undefined,
         clientRequestId: newClientRequestId(),
       });
       setOpen(false);
       setName(""); setCategory(""); setUnit(""); setQtyRaw(""); setNotes(""); setItemId("");
-      setFlash(lang === "id" ? "Tersimpan" : "تم الحفظ");
+      setFlash(lang === "id" ? "Tersimpan" : "تم حفظ رصيد الافتتاح");
       await qc.invalidateQueries({ queryKey: ["v3-opening-moves"] });
       await qc.invalidateQueries({ queryKey: ["v3-warehouse"] });
       window.setTimeout(() => setFlash(""), 2500);
@@ -121,7 +127,13 @@ export function V3OpeningPage({ lang }: { lang: Lang }) {
                 ))}
               </select>
             </FormField>
-            {itemId === "" ? (
+            {itemId !== "" ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                {lang === "id"
+                  ? "Jika bahan sudah punya opening, sistem akan menolak duplikat."
+                  : "إذا كان للمادة رصيد افتتاح مسبقاً، سيرفض النظام التكرار ويطلب استخدام الإدخال للمستودع."}
+              </div>
+            ) : (
               <>
                 <FormField label={lang === "id" ? "Nama bahan" : "اسم المادة"} required>
                   <TextInput value={name} onChange={(e) => setName(e.target.value)} />
@@ -130,7 +142,7 @@ export function V3OpeningPage({ lang }: { lang: Lang }) {
                   <TextInput value={category} onChange={(e) => setCategory(e.target.value)} />
                 </FormField>
               </>
-            ) : null}
+            )}
             <FormField label={lang === "id" ? "Tanggal" : "التاريخ"}>
               <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </FormField>

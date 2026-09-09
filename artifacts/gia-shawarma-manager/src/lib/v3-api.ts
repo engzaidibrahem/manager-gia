@@ -33,6 +33,7 @@ export type V3WarehouseRow = {
   needsQuantityReview?: boolean;
   needsReview?: boolean;
   isNegative?: boolean;
+  reviewReason?: string | null;
 };
 
 export type V3Purchase = {
@@ -104,7 +105,18 @@ export function listV3Kitchen() {
 }
 
 export function createV3Item(body: { name: string; category?: string; baseUnit?: string }) {
-  return api("/warehouse/items", { method: "POST", body: JSON.stringify(body) });
+  return api<{ item?: { id: number }; id?: number }>("/warehouse/items", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function getV3WarehouseItem(id: number) {
+  return api<{
+    item: V3WarehouseRow;
+    movements: Array<Record<string, unknown>>;
+  }>(`/warehouse/items/${id}`);
+}
+
+export function listV3PurchasePayments(id: number) {
+  return api<{ rows: Array<Record<string, unknown>> }>(`/purchases/${id}/payments`);
 }
 
 export function listV3Purchases(params: Record<string, string | number | undefined>) {

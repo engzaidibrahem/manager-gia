@@ -1,11 +1,11 @@
 import { type ReactNode, useState } from 'react';
 import {
-  Boxes, ChevronRight, ClipboardList, Coffee, Globe2, LayoutDashboard, Menu, PackageMinus, PackagePlus, ShieldCheck, ShoppingCart, Users, CalendarCheck, Wallet, X,
+  Boxes, ChevronRight, ClipboardList, Coffee, Globe2, Menu, PackageMinus, PackagePlus, ShieldCheck, ShoppingCart, Users, CalendarCheck, Wallet, X,
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useT, type Lang } from '@/lib/i18n';
 
-type IconType = typeof LayoutDashboard;
+type IconType = typeof Boxes;
 
 export function Shell({
   children, lang, setLang, user, onLogout,
@@ -22,11 +22,10 @@ export function Shell({
   const role = user?.role ?? '';
   const canOpeningBalance = role === 'owner' || role === 'manager';
   const nav: { href: string; label: string; icon: IconType }[] = [
-    { href: '/', label: lang === 'id' ? 'Ringkasan' : 'ملخص', icon: LayoutDashboard },
     { href: '/warehouse', label: lang === 'id' ? 'Gudang' : 'المستودع', icon: Boxes },
     ...(canOpeningBalance ? [{ href: '/opening', label: lang === 'id' ? 'Saldo awal' : 'رصيد الافتتاح', icon: ClipboardList }] : []),
-    { href: '/warehouse-in', label: lang === 'id' ? 'Masuk gudang' : 'إدخال إلى المستودع', icon: PackagePlus },
-    { href: '/warehouse-out', label: lang === 'id' ? 'Keluar dapur' : 'إخراج إلى المطبخ', icon: PackageMinus },
+    { href: '/warehouse-in', label: lang === 'id' ? 'Masuk gudang' : 'إدخال للمستودع', icon: PackagePlus },
+    { href: '/warehouse-out', label: lang === 'id' ? 'Keluar dapur' : 'إخراج للمطبخ', icon: PackageMinus },
     { href: '/kitchen', label: lang === 'id' ? 'Dapur' : 'المطبخ', icon: Coffee },
     { href: '/purchases', label: lang === 'id' ? 'Pembelian' : 'المشتريات', icon: ShoppingCart },
     { href: '/finance', label: lang === 'id' ? 'Keuangan' : 'المالية', icon: Wallet },
@@ -46,7 +45,9 @@ export function Shell({
         <div className="mt-8 shrink-0 px-2 text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">{lang === 'id' ? 'Gudang' : 'المستودع'}</div>
         <nav className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto pb-2">
           {nav.map(({ href, label, icon: Icon }) => {
-            const active = location === href;
+            const active = href === '/'
+              ? location === '/'
+              : location === href || location.startsWith(`${href}/`);
             return (
               <Link key={href} href={href} onClick={() => setMobileOpen(false)} className={`nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-[13px] font-semibold ${active ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[0_3px_0_hsl(17_78%_32%)]' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]'}`}>
                 <Icon size={17} strokeWidth={active ? 2.5 : 1.8} /><span>{label}</span>{active && <ChevronRight size={14} className="ml-auto rtl:rotate-180" />}
