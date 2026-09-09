@@ -234,3 +234,98 @@ export type V3PurchasePayment = typeof v3PurchasePaymentsTable.$inferSelect;
 export type V3CapitalTransaction = typeof v3CapitalTransactionsTable.$inferSelect;
 export type V3Income = typeof v3IncomeTable.$inferSelect;
 export type V3Expense = typeof v3ExpensesTable.$inferSelect;
+
+/** PHASE 7 — employees / attendance / payroll */
+export const V3_SALARY_TYPES = ["MONTHLY", "DAILY"] as const;
+export type V3SalaryType = (typeof V3_SALARY_TYPES)[number];
+
+export const V3_ATTENDANCE_STATUSES = ["PRESENT", "ABSENT", "LEAVE"] as const;
+export type V3AttendanceStatus = (typeof V3_ATTENDANCE_STATUSES)[number];
+
+export const v3EmployeesTable = pgTable("v3_employees", {
+  id: serial("id").primaryKey(),
+  fullName: text("full_name").notNull(),
+  phone: text("phone"),
+  secondaryPhone: text("secondary_phone"),
+  jobTitle: text("job_title").notNull().default(""),
+  salaryAmount: numeric("salary_amount", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
+  /** MONTHLY | DAILY */
+  salaryType: text("salary_type").notNull().default("MONTHLY"),
+  workStartDate: date("work_start_date", { mode: "string" }).notNull(),
+  workEndDate: date("work_end_date", { mode: "string" }),
+  expectedDailyHours: numeric("expected_daily_hours", { precision: 6, scale: 2, mode: "number" }),
+  notes: text("notes"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export const v3AttendanceTable = pgTable("v3_attendance", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => v3EmployeesTable.id),
+  attendanceDate: date("attendance_date", { mode: "string" }).notNull(),
+  /** PRESENT | ABSENT | LEAVE */
+  status: text("status").notNull(),
+  checkInTime: text("check_in_time"),
+  checkOutTime: text("check_out_time"),
+  workedHours: numeric("worked_hours", { precision: 8, scale: 2, mode: "number" }),
+  notes: text("notes"),
+  actor: text("actor").notNull().default(""),
+  userId: integer("user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (t) => [
+  uniqueIndex("v3_attendance_employee_date_uidx").on(t.employeeId, t.attendanceDate),
+]);
+
+export const v3PayrollTable = pgTable("v3_payroll", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => v3EmployeesTable.id),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(),
+  baseSalary: numeric("base_salary", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  absenceDays: integer("absence_days").notNull().default(0),
+  manualDeduction: numeric("manual_deduction", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
+  manualBonus: numeric("manual_bonus", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
+  netSalary: numeric("net_salary", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  paidAmount: numeric("paid_amount", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
+  paymentStatus: text("payment_status").notNull().default("UNPAID"),
+  paymentDate: date("payment_date", { mode: "string" }),
+  notes: text("notes"),
+  actor: text("actor").notNull().default(""),
+  userId: integer("user_id"),
+  status: text("status").notNull().default("active"),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: text("voided_by"),
+  voidReason: text("void_reason"),
+  clientRequestId: text("client_request_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (t) => [
+  uniqueIndex("v3_payroll_employee_period_uidx").on(t.employeeId, t.year, t.month),
+  uniqueIndex("v3_payroll_client_request_uidx").on(t.clientRequestId),
+]);
+
+export const v3SalaryPaymentsTable = pgTable("v3_salary_payments", {
+  id: serial("id").primaryKey(),
+  payrollId: integer("payroll_id").notNull().references(() => v3PayrollTable.id),
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  paymentDate: date("payment_date", { mode: "string" }).notNull(),
+  paidBy: text("paid_by").notNull().default(""),
+  notes: text("notes"),
+  actor: text("actor").notNull().default(""),
+  userId: integer("user_id"),
+  status: text("status").notNull().default("active"),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: text("voided_by"),
+  voidReason: text("void_reason"),
+  clientRequestId: text("client_request_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("v3_salary_payments_client_request_uidx").on(t.clientRequestId),
+]);
+
+export type V3Employee = typeof v3EmployeesTable.$inferSelect;
+export type V3Attendance = typeof v3AttendanceTable.$inferSelect;
+export type V3Payroll = typeof v3PayrollTable.$inferSelect;
+export type V3SalaryPayment = typeof v3SalaryPaymentsTable.$inferSelect;

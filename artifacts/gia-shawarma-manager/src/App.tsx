@@ -17,6 +17,9 @@ import { V3WarehouseOutPage } from '@/pages/v3/warehouse-out';
 import { V3KitchenPage } from '@/pages/v3/kitchen';
 import { V3PurchasesPage } from '@/pages/v3/purchases';
 import { V3FinancePage } from '@/pages/v3/finance';
+import { V3EmployeesPage } from '@/pages/v3/employees';
+import { V3EmployeeDetailPage } from '@/pages/v3/employee-detail';
+import { V3AttendancePage } from '@/pages/v3/attendance';
 
 const queryClient = new QueryClient();
 installAuthFetch();
@@ -43,6 +46,9 @@ function AppRouter({ user, onLogout }: { user: AuthUser; onLogout: () => void })
           <Route path="/kitchen" component={() => <V3KitchenPage lang={lang} />} />
           <Route path="/purchases" component={() => <V3PurchasesPage lang={lang} />} />
           <Route path="/finance" component={() => <V3FinancePage lang={lang} />} />
+          <Route path="/employees/:id" component={() => <V3EmployeeDetailPage lang={lang} />} />
+          <Route path="/employees" component={() => <V3EmployeesPage lang={lang} />} />
+          <Route path="/attendance" component={() => <V3AttendancePage lang={lang} />} />
           <Route component={NotFound} />
         </Switch>
       </ErrorBoundary>

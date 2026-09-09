@@ -133,6 +133,7 @@ export function getV3FinanceSummary() {
     totalIncome: number;
     totalExpenses: number;
     totalPurchasePayments: number;
+    totalSalaryPayments: number;
     available: number;
   }>("/finance/summary");
 }
@@ -171,6 +172,130 @@ export function postV3Expense(body: Record<string, unknown>) {
 
 export function voidV3Expense(id: number, voidReason: string) {
   return api(`/finance/expenses/${id}/void`, { method: "POST", body: JSON.stringify({ voidReason }) });
+}
+
+export type V3Employee = {
+  id: number;
+  fullName: string;
+  phone: string | null;
+  secondaryPhone: string | null;
+  jobTitle: string;
+  salaryAmount: number;
+  salaryType: "MONTHLY" | "DAILY";
+  workStartDate: string;
+  workEndDate: string | null;
+  expectedDailyHours: number | null;
+  notes: string | null;
+  isActive: boolean;
+};
+
+export function listV3Employees(params: Record<string, string | number | undefined>) {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v != null && v !== "") q.set(k, String(v));
+  });
+  return api<{ rows: V3Employee[]; total: number; page: number; pageSize: number }>(`/employees?${q}`);
+}
+
+export function getV3Employee(id: number) {
+  return api<{ employee: V3Employee }>(`/employees/${id}`);
+}
+
+export function postV3Employee(body: Record<string, unknown>) {
+  return api<{ employee: V3Employee }>("/employees", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function patchV3Employee(id: number, body: Record<string, unknown>) {
+  return api<{ employee: V3Employee }>(`/employees/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function endV3Employee(id: number, workEndDate?: string) {
+  return api<{ employee: V3Employee }>(`/employees/${id}/end`, {
+    method: "POST",
+    body: JSON.stringify({ workEndDate }),
+  });
+}
+
+export function listV3Attendance(params: Record<string, string | number | undefined>) {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v != null && v !== "") q.set(k, String(v));
+  });
+  return api<{
+    rows: Array<{
+      id: number;
+      employeeId: number;
+      employeeName: string;
+      attendanceDate: string;
+      status: string;
+      checkInTime: string | null;
+      checkOutTime: string | null;
+      workedHours: number | null;
+      notes: string | null;
+    }>;
+    total: number;
+  }>(`/attendance?${q}`);
+}
+
+export function postV3Attendance(body: Record<string, unknown>) {
+  return api("/attendance", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function getV3AttendanceSummary(employeeId: number, year: number, month: number) {
+  return api<{
+    presentDays: number;
+    absentDays: number;
+    leaveDays: number;
+    totalWorkedHours: number;
+  }>(`/employees/${employeeId}/attendance-summary?year=${year}&month=${month}`);
+}
+
+export function listV3Payroll(params: Record<string, string | number | undefined>) {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v != null && v !== "") q.set(k, String(v));
+  });
+  return api<{
+    rows: Array<{
+      id: number;
+      employeeId: number;
+      employeeName: string;
+      year: number;
+      month: number;
+      baseSalary: number;
+      absenceDays: number;
+      manualDeduction: number;
+      manualBonus: number;
+      netSalary: number;
+      paidAmount: number;
+      remaining: number;
+      paymentStatus: string;
+      notes: string | null;
+    }>;
+  }>(`/payroll?${q}`);
+}
+
+export function postV3Payroll(body: Record<string, unknown>) {
+  return api("/payroll", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function postV3SalaryPayment(payrollId: number, body: Record<string, unknown>) {
+  return api(`/payroll/${payrollId}/payments`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function listV3SalaryPayments(payrollId: number) {
+  return api<{ rows: Array<Record<string, unknown>> }>(`/payroll/${payrollId}/payments`);
+}
+
+export function salaryTypeLabel(s: string, lang: "ar" | "id") {
+  if (s === "DAILY") return lang === "id" ? "Harian" : "يومي";
+  return lang === "id" ? "Bulanan" : "شهري";
+}
+
+export function attendanceStatusLabel(s: string, lang: "ar" | "id") {
+  if (s === "PRESENT") return lang === "id" ? "Hadir" : "حضور";
+  if (s === "ABSENT") return lang === "id" ? "Absen" : "غياب";
+  return lang === "id" ? "Cuti" : "إجازة";
 }
 
 export function todayISO() {

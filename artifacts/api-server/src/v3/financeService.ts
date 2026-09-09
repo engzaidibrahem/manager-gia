@@ -1,6 +1,6 @@
 /**
- * GIA V3 Simple Finance — capital + income + expenses + purchase payments.
- * AVAILABLE = net capital + income − expenses − purchase payments
+ * GIA V3 Simple Finance — capital + income + expenses + purchase payments + salary payments.
+ * AVAILABLE = net capital + income − expenses − purchase payments − salary payments
  */
 import { desc, eq } from "drizzle-orm";
 import {
@@ -9,6 +9,7 @@ import {
   v3ExpensesTable,
   v3IncomeTable,
   v3PurchasePaymentsTable,
+  v3SalaryPaymentsTable,
 } from "@workspace/db";
 import { AppError } from "../lib/errors";
 
@@ -18,11 +19,12 @@ function todayISO() {
 }
 
 export async function getFinanceSummary() {
-  const [capitalRows, incomeRows, expenseRows, paymentRows] = await Promise.all([
+  const [capitalRows, incomeRows, expenseRows, paymentRows, salaryRows] = await Promise.all([
     db.select().from(v3CapitalTransactionsTable).where(eq(v3CapitalTransactionsTable.status, "active")),
     db.select().from(v3IncomeTable).where(eq(v3IncomeTable.status, "active")),
     db.select().from(v3ExpensesTable).where(eq(v3ExpensesTable.status, "active")),
     db.select().from(v3PurchasePaymentsTable).where(eq(v3PurchasePaymentsTable.status, "active")),
+    db.select().from(v3SalaryPaymentsTable).where(eq(v3SalaryPaymentsTable.status, "active")),
   ]);
 
   let netCapital = 0;
@@ -36,13 +38,16 @@ export async function getFinanceSummary() {
   const totalIncome = incomeRows.reduce((s, r) => s + Number(r.amount), 0);
   const totalExpenses = expenseRows.reduce((s, r) => s + Number(r.amount), 0);
   const totalPurchasePayments = paymentRows.reduce((s, r) => s + Number(r.amount), 0);
-  const available = netCapital + totalIncome - totalExpenses - totalPurchasePayments;
+  const totalSalaryPayments = salaryRows.reduce((s, r) => s + Number(r.amount), 0);
+  const available =
+    netCapital + totalIncome - totalExpenses - totalPurchasePayments - totalSalaryPayments;
 
   return {
     netCapital,
     totalIncome,
     totalExpenses,
     totalPurchasePayments,
+    totalSalaryPayments,
     available,
   };
 }

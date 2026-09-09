@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from 'react';
 import {
-  Boxes, ChevronRight, ClipboardList, Coffee, Globe2, LayoutDashboard, Menu, PackageMinus, PackagePlus, ShieldCheck, ShoppingCart, Wallet, X,
+  Boxes, ChevronRight, ClipboardList, Coffee, Globe2, LayoutDashboard, Menu, PackageMinus, PackagePlus, ShieldCheck, ShoppingCart, Users, CalendarCheck, Wallet, X,
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useT, type Lang } from '@/lib/i18n';
@@ -30,6 +30,8 @@ export function Shell({
     { href: '/kitchen', label: lang === 'id' ? 'Dapur' : 'المطبخ', icon: Coffee },
     { href: '/purchases', label: lang === 'id' ? 'Pembelian' : 'المشتريات', icon: ShoppingCart },
     { href: '/finance', label: lang === 'id' ? 'Keuangan' : 'المالية', icon: Wallet },
+    { href: '/employees', label: lang === 'id' ? 'Karyawan & Gaji' : 'الموظفون والرواتب', icon: Users },
+    { href: '/attendance', label: lang === 'id' ? 'Absensi' : 'الحضور', icon: CalendarCheck },
   ];
   return (
     <div className={`app-shell grain ${lang === 'ar' ? 'rtl' : ''}`}>

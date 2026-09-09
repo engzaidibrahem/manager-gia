@@ -31,6 +31,21 @@ import {
   voidExpense,
   voidIncome,
 } from "../v3/financeService";
+import {
+  addSalaryPayment,
+  attendanceSummary,
+  createEmployee,
+  createOrUpdatePayroll,
+  endEmployment,
+  getEmployee,
+  listAttendance,
+  listEmployees,
+  listPayroll,
+  listSalaryPayments,
+  updateEmployee,
+  upsertAttendance,
+  voidSalaryPayment,
+} from "../v3/employeeService";
 import { AppError } from "../lib/errors";
 
 const router: IRouter = Router();
@@ -443,6 +458,214 @@ router.post(
     const body = z.object({ voidReason: z.string().min(1) }).parse(req.body);
     res.json(
       await voidExpense({ id: Number(req.params.id), voidedBy: actorOf(req), voidReason: body.voidReason }),
+    );
+  }),
+);
+
+// ---- Employees ----
+router.get(
+  "/employees",
+  asyncHandler(async (req, res) => {
+    const q = typeof req.query.q === "string" ? req.query.q : undefined;
+    const status = typeof req.query.status === "string" ? req.query.status : "all";
+    const page = Number(req.query.page || 1);
+    const pageSize = Number(req.query.pageSize || 50);
+    res.json(
+      await listEmployees({
+        q,
+        status: status === "active" || status === "ended" ? status : "all",
+        page,
+        pageSize,
+      }),
+    );
+  }),
+);
+
+router.post(
+  "/employees",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        fullName: z.string().min(1),
+        phone: z.string().optional().nullable(),
+        secondaryPhone: z.string().optional().nullable(),
+        jobTitle: z.string().optional(),
+        salaryAmount: z.number().nonnegative(),
+        salaryType: z.enum(["MONTHLY", "DAILY"]),
+        workStartDate: z.string().optional(),
+        expectedDailyHours: z.number().nullable().optional(),
+        notes: z.string().optional().nullable(),
+      })
+      .parse(req.body);
+    const row = await createEmployee(body);
+    res.status(201).json({ employee: row });
+  }),
+);
+
+router.get(
+  "/employees/:id",
+  asyncHandler(async (req, res) => {
+    res.json({ employee: await getEmployee(Number(req.params.id)) });
+  }),
+);
+
+router.patch(
+  "/employees/:id",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        fullName: z.string().optional(),
+        phone: z.string().optional().nullable(),
+        secondaryPhone: z.string().optional().nullable(),
+        jobTitle: z.string().optional(),
+        salaryAmount: z.number().nonnegative().optional(),
+        salaryType: z.enum(["MONTHLY", "DAILY"]).optional(),
+        workStartDate: z.string().optional(),
+        expectedDailyHours: z.number().nullable().optional(),
+        notes: z.string().optional().nullable(),
+      })
+      .parse(req.body);
+    res.json({ employee: await updateEmployee(Number(req.params.id), body) });
+  }),
+);
+
+router.post(
+  "/employees/:id/end",
+  asyncHandler(async (req, res) => {
+    const body = z.object({ workEndDate: z.string().optional() }).parse(req.body ?? {});
+    res.json({ employee: await endEmployment(Number(req.params.id), body.workEndDate) });
+  }),
+);
+
+router.get(
+  "/employees/:id/attendance-summary",
+  asyncHandler(async (req, res) => {
+    const year = Number(req.query.year);
+    const month = Number(req.query.month);
+    res.json(await attendanceSummary(Number(req.params.id), year, month));
+  }),
+);
+
+// ---- Attendance ----
+router.get(
+  "/attendance",
+  asyncHandler(async (req, res) => {
+    res.json(
+      await listAttendance({
+        employeeId: req.query.employeeId ? Number(req.query.employeeId) : undefined,
+        from: typeof req.query.from === "string" ? req.query.from : undefined,
+        to: typeof req.query.to === "string" ? req.query.to : undefined,
+        status: typeof req.query.status === "string" ? req.query.status : undefined,
+        page: Number(req.query.page || 1),
+        pageSize: Number(req.query.pageSize || 50),
+      }),
+    );
+  }),
+);
+
+router.post(
+  "/attendance",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        employeeId: z.number().int().positive(),
+        attendanceDate: z.string().min(8),
+        status: z.enum(["PRESENT", "ABSENT", "LEAVE"]),
+        checkInTime: z.string().optional().nullable(),
+        checkOutTime: z.string().optional().nullable(),
+        workedHours: z.number().nullable().optional(),
+        notes: z.string().optional().nullable(),
+      })
+      .parse(req.body);
+    const result = await upsertAttendance({
+      ...body,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+    });
+    res.status(result.created ? 201 : 200).json(result);
+  }),
+);
+
+// ---- Payroll ----
+router.get(
+  "/payroll",
+  asyncHandler(async (req, res) => {
+    res.json(
+      await listPayroll({
+        employeeId: req.query.employeeId ? Number(req.query.employeeId) : undefined,
+        year: req.query.year ? Number(req.query.year) : undefined,
+        month: req.query.month ? Number(req.query.month) : undefined,
+        page: Number(req.query.page || 1),
+        pageSize: Number(req.query.pageSize || 50),
+      }),
+    );
+  }),
+);
+
+router.post(
+  "/payroll",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        employeeId: z.number().int().positive(),
+        year: z.number().int(),
+        month: z.number().int().min(1).max(12),
+        baseSalary: z.number().nonnegative().optional(),
+        manualDeduction: z.number().nonnegative().optional(),
+        manualBonus: z.number().nonnegative().optional(),
+        confirmedNetSalary: z.number().nonnegative().optional(),
+        notes: z.string().optional().nullable(),
+        clientRequestId: z.string().optional(),
+      })
+      .parse(req.body);
+    const result = await createOrUpdatePayroll({
+      ...body,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  }),
+);
+
+router.get(
+  "/payroll/:id/payments",
+  asyncHandler(async (req, res) => {
+    res.json(await listSalaryPayments(Number(req.params.id)));
+  }),
+);
+
+router.post(
+  "/payroll/:id/payments",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        amount: z.number().positive(),
+        paymentDate: z.string().optional(),
+        paidBy: z.string().optional(),
+        notes: z.string().optional().nullable(),
+        clientRequestId: z.string().optional(),
+      })
+      .parse(req.body);
+    const result = await addSalaryPayment({
+      payrollId: Number(req.params.id),
+      ...body,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  }),
+);
+
+router.post(
+  "/salary-payments/:id/void",
+  asyncHandler(async (req, res) => {
+    const body = z.object({ voidReason: z.string().min(1) }).parse(req.body);
+    res.json(
+      await voidSalaryPayment({
+        paymentId: Number(req.params.id),
+        voidedBy: actorOf(req),
+        voidReason: body.voidReason,
+      }),
     );
   }),
 );

@@ -9,7 +9,7 @@
     "dev:watch": "cross-env NODE_ENV=development pnpm run build && cross-env PORT=5000 pnpm run start",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test src/lib/recipe-cost.test.ts src/lib/units.test.ts src/lib/inventory-core.test.ts src/lib/inventory-e2e.test.ts src/lib/inventory-acceptance.test.ts src/lib/inventory-pg.test.ts src/lib/finance-e2e.test.ts src/lib/finance-available.test.ts src/lib/v3-warehouse.test.ts",
-    "test:v3": "cross-env DATABASE_URL=pglite://.data/gia-v3-test tsx --test --test-concurrency=1 src/lib/v3-warehouse.test.ts src/lib/v3-purchases-finance.test.ts",
+    "test:v3": "cross-env DATABASE_URL=pglite://.data/gia-v3-test tsx --test --test-concurrency=1 src/lib/v3-warehouse.test.ts src/lib/v3-purchases-finance.test.ts src/lib/v3-employees.test.ts",
     "test:pg": "cross-env DATABASE_URL_PG=postgresql://gia_user:gia_local_dev@127.0.0.1:5432/gia_shawarma tsx --test --test-concurrency=1 src/lib/inventory-pg.test.ts src/lib/inventory-acceptance-pg.test.ts"
   },
   "dependencies": {

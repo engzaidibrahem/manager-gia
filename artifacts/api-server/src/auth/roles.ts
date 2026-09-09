@@ -52,7 +52,7 @@ export function canAccess(role: Role, method: string, path: string): boolean {
     // Capital register is owner/manager only (sensitive operational capital)
     if (write && (p.includes("/capital") || p.includes("/finance/capital"))) return false;
     if (p.startsWith("/finance") || p.startsWith("/day-archives")) return true;
-    if (p.startsWith("/v3/purchases") || p.startsWith("/v3/finance")) return true;
+    if (p.startsWith("/v3/purchases") || p.startsWith("/v3/finance") || p.startsWith("/v3/employees") || p.startsWith("/v3/attendance") || p.startsWith("/v3/payroll") || p.startsWith("/v3/salary-payments")) return true;
     return !write && (p.startsWith("/dashboard") || p.startsWith("/purchases") || p.startsWith("/recipes") || p.startsWith("/v3"));
   }
 
