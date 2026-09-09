@@ -1,17 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Archive, CalendarDays, Search } from 'lucide-react';
 import { Link } from 'wouter';
+import { PageHint, TextInput } from '@/components/FormKit';
 import { PageTitle } from '@/components/layout';
 import { getWarehouseArchive, listWarehouseArchives, type WarehouseDayArchive, type WarehouseLot } from '@/lib/bulk-api';
+import { displayActor } from '@/lib/display-labels';
 import { useT, type Lang } from '@/lib/i18n';
-import { formatIDR, shortDate } from '@/lib/utils';
+import { formatBusinessDate, formatIDR } from '@/lib/utils';
 
 export function WarehouseArchivePage({ lang }: { lang: Lang }) {
   const t = useT(lang);
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   const [selected, setSelected] = useState<string>('');
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const id = window.setTimeout(() => setDebounced(q.trim()), 250);
@@ -40,6 +43,38 @@ export function WarehouseArchivePage({ lang }: { lang: Lang }) {
   const archive = detailQuery.data as WarehouseDayArchive | undefined;
   const receipts = (archive?.snapshot?.receipts ?? []) as WarehouseLot[];
 
+  const grouped = useMemo(() => {
+    const map = new Map<string, {
+      key: string;
+      itemName: string;
+      itemUnit: string;
+      qrToken: string;
+      lots: WarehouseLot[];
+      totalReceived: number;
+      totalRemaining: number;
+      totalValue: number;
+    }>();
+    for (const r of receipts) {
+      const key = `${r.itemName}::${r.qrToken || r.itemId || r.id}`;
+      const cur = map.get(key) ?? {
+        key,
+        itemName: String(r.itemName || '—'),
+        itemUnit: String(r.itemUnit || ''),
+        qrToken: String(r.qrToken || ''),
+        lots: [] as WarehouseLot[],
+        totalReceived: 0,
+        totalRemaining: 0,
+        totalValue: 0,
+      };
+      cur.lots.push(r);
+      cur.totalReceived += Number(r.quantityReceived || 0);
+      cur.totalRemaining += Number(r.quantityRemaining || 0);
+      cur.totalValue += Number(r.quantityReceived || 0) * Number(r.costPerUnit || 0);
+      map.set(key, cur);
+    }
+    return [...map.values()];
+  }, [receipts]);
+
   return (
     <div className="fade-up">
       <PageTitle
@@ -47,18 +82,24 @@ export function WarehouseArchivePage({ lang }: { lang: Lang }) {
         title={t('warehouseArchive')}
         description={t('warehouseArchiveDesc')}
         action={(
-          <Link href="/inventory" className="rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold hover:bg-[hsl(var(--muted))]">
-            ← {t('inventory')}
+          <Link href="/archives" className="rounded-xl border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold hover:bg-[hsl(var(--muted))]">
+            {t('archives')}
           </Link>
         )}
       />
 
-      <div className="mb-4 flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2">
-        <Search size={15} className="text-[hsl(var(--muted-foreground))]" />
-        <input
+      <PageHint>
+        {lang === 'id'
+          ? 'Arsip gudang per tanggal: lot penerimaan dan saldo. Bukan arsip operasional harian.'
+          : 'أرشيف المستودع حسب التاريخ: دفعات الوارد والأرصدة. ليس الأرشيف التشغيلي اليومي.'}
+      </PageHint>
+
+      <div className="mb-4 flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1">
+        <Search size={15} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
+        <TextInput
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="w-full bg-transparent text-sm outline-none"
+          className="border-0 bg-transparent shadow-none hover:border-0 focus:border-0 focus:ring-0"
           placeholder={t('searchArchive')}
         />
       </div>
@@ -74,7 +115,7 @@ export function WarehouseArchivePage({ lang }: { lang: Lang }) {
                 onClick={() => setSelected(row.businessDate)}
                 className={`flex w-full flex-col rounded-xl px-3 py-2.5 text-start text-xs ${selected === row.businessDate ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'hover:bg-[hsl(var(--muted))]'}`}
               >
-                <span className="font-bold">{shortDate(row.businessDate)}</span>
+                <span className="font-bold">{formatBusinessDate(row.businessDate, lang === 'id' ? 'id-ID' : 'ar-SA')}</span>
                 <span className="mt-0.5 opacity-80">{row.receiptCount} · {formatIDR(row.totalValue)}</span>
               </button>
             ))}
@@ -88,79 +129,69 @@ export function WarehouseArchivePage({ lang }: { lang: Lang }) {
           {archive ? (
             <>
               <section className="panel soft-shadow p-5">
-                <h2 className="flex items-center gap-2 text-lg font-bold"><Archive size={18} />{shortDate(archive.businessDate)}</h2>
+                <h2 className="flex items-center gap-2 text-lg font-bold"><Archive size={18} />{formatBusinessDate(archive.businessDate, lang === 'id' ? 'id-ID' : 'ar-SA')}</h2>
                 <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
-                  {t('archivedAt')}: {new Date(archive.closedAt).toLocaleString(lang === 'id' ? 'id-ID' : 'ar-SA')} · {t('closedBy')}: {archive.closedBy || '—'}
+                  {t('archivedAt')}: {new Date(archive.closedAt).toLocaleString(lang === 'id' ? 'id-ID' : 'ar-SA')} · {t('closedBy')}: {displayActor(archive.closedBy, lang)}
                 </p>
-                {archive.notes ? <p className="mt-2 text-sm">{archive.notes}</p> : null}
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <Stat label={t('purchaseCount')} value={String(archive.receiptCount)} />
+                  <Stat label={lang === 'id' ? 'Jumlah lot' : 'عدد الدفعات'} value={String(archive.receiptCount)} />
                   <Stat label={t('quantity')} value={String(archive.totalQuantity)} />
                   <Stat label={t('totalAmount')} value={formatIDR(archive.totalValue)} />
                 </div>
               </section>
 
               <section className="panel soft-shadow p-5">
-                <h3 className="mb-3 font-bold">{t('dailyReceipts')}</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px] text-start text-xs">
-                    <thead>
-                      <tr className="border-b border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))]">
-                        <th className="px-2 py-2 font-semibold">{t('name')}</th>
-                        <th className="px-2 py-2 font-semibold">{t('brand')}</th>
-                        <th className="px-2 py-2 font-semibold">{t('quantity')}</th>
-                        <th className="px-2 py-2 font-semibold">{t('lotRemaining')}</th>
-                        <th className="px-2 py-2 font-semibold">{t('unitCost')}</th>
-                        <th className="px-2 py-2 font-semibold">{t('qrToken')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {receipts.map((r) => (
-                        <tr key={r.id} className="border-b border-[hsl(var(--border))/.6]">
-                          <td className="px-2 py-2 font-semibold">{r.itemName}</td>
-                          <td className="px-2 py-2">{r.brand || '—'}</td>
-                          <td className="number px-2 py-2">{r.quantityReceived} {r.itemUnit}</td>
-                          <td className="number px-2 py-2">{r.quantityRemaining}</td>
-                          <td className="number px-2 py-2">{formatIDR(r.costPerUnit)}</td>
-                          <td className="px-2 py-2 font-mono text-[10px]">{r.qrToken || '—'}</td>
-                        </tr>
-                      ))}
-                      {!receipts.length && (
-                        <tr><td colSpan={6} className="px-2 py-8 text-center text-[hsl(var(--muted-foreground))]">{t('noRecords')}</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-
-              <section className="panel soft-shadow p-5">
-                <h3 className="mb-3 font-bold">{t('stockSnapshot')}</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[520px] text-start text-xs">
-                    <thead>
-                      <tr className="border-b border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))]">
-                        <th className="px-2 py-2 font-semibold">{t('name')}</th>
-                        <th className="px-2 py-2 font-semibold">{t('warehouseStock')}</th>
-                        <th className="px-2 py-2 font-semibold">{t('kitchenStock')}</th>
-                        <th className="px-2 py-2 font-semibold">{t('qrToken')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(archive.snapshot?.stockAtClose ?? []).map((item) => {
-                        const row = item as {
-                          id: number; name: string; unit: string; currentStock: number; kitchenStock: number; qrToken?: string;
-                        };
-                        return (
-                          <tr key={row.id} className="border-b border-[hsl(var(--border))/.6]">
-                            <td className="px-2 py-2 font-semibold">{row.name}</td>
-                            <td className="number px-2 py-2">{row.currentStock} {row.unit}</td>
-                            <td className="number px-2 py-2">{row.kitchenStock} {row.unit}</td>
-                            <td className="px-2 py-2 font-mono text-[10px]">{row.qrToken || '—'}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <h3 className="mb-3 font-bold">{lang === 'id' ? 'Penerimaan per item (lot)' : 'الوارد حسب الصنف (دفعات)'}</h3>
+                <div className="space-y-3">
+                  {grouped.map((g) => {
+                    const open = expanded[g.key] ?? g.lots.length === 1;
+                    return (
+                      <div key={g.key} className="rounded-xl border border-[hsl(var(--border))] p-3">
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between gap-2 text-start"
+                          onClick={() => setExpanded((prev) => ({ ...prev, [g.key]: !open }))}
+                        >
+                          <div>
+                            <div className="text-sm font-bold">{g.itemName}</div>
+                            <div className="mt-0.5 text-[11px] text-[hsl(var(--muted-foreground))]">
+                              {g.lots.length} {lang === 'id' ? 'lot' : 'دفعة'} · {formatIDR(g.totalValue)}
+                            </div>
+                          </div>
+                          <div className="number text-xs font-bold">{g.totalReceived} {g.itemUnit}</div>
+                        </button>
+                        {open ? (
+                          <div className="mt-3 overflow-x-auto">
+                            <table className="w-full min-w-[520px] text-start text-xs">
+                              <thead>
+                                <tr className="border-b border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))]">
+                                  <th className="px-2 py-2 font-semibold">{lang === 'id' ? 'Lot' : 'دفعة'}</th>
+                                  <th className="px-2 py-2 font-semibold">{t('brand')}</th>
+                                  <th className="px-2 py-2 font-semibold">{t('quantity')}</th>
+                                  <th className="px-2 py-2 font-semibold">{t('lotRemaining')}</th>
+                                  <th className="px-2 py-2 font-semibold">{t('unitCost')}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {g.lots.map((r, idx) => (
+                                  <tr key={r.id} className="border-b border-[hsl(var(--border))/.6]">
+                                    <td className="px-2 py-2 font-semibold">{lang === 'id' ? `Lot ${idx + 1}` : `دفعة ${idx + 1}`}</td>
+                                    <td className="px-2 py-2">{r.brand || '—'}</td>
+                                    <td className="number px-2 py-2">{r.quantityReceived} {r.itemUnit}</td>
+                                    <td className="number px-2 py-2">{r.quantityRemaining}</td>
+                                    <td className="number px-2 py-2">{formatIDR(r.costPerUnit)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                  {!grouped.length && (
+                    <p className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">{t('noRecords')}</p>
+                  )}
                 </div>
               </section>
             </>

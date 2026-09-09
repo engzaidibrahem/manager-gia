@@ -5,7 +5,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { PGlite } from "@electric-sql/pglite";
 import pg from "pg";
-import * as schema from "./schema";
+import * as schema from "./schema/index";
 import { bootstrapSchema, resolvePgliteDataDir } from "./bootstrap";
 
 const { Pool } = pg;

@@ -17,6 +17,9 @@ if (Number.isNaN(port) || port <= 0) {
 
 await initDatabase();
 
+const { seedDefaultAdmin } = await import("./auth/seed");
+await seedDefaultAdmin();
+
 const { default: app } = await import("./app");
 
 app.listen(port, (err) => {

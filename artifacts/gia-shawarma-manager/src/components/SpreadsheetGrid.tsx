@@ -3,7 +3,7 @@ import { FileDown, FileUp, Plus, Save, Search, Trash2, X } from 'lucide-react';
 import { exportRowsToExcel } from '@/lib/export';
 import { parseExcelFile, parseClipboard } from '@/lib/import';
 import { type RowUpdater } from '@/lib/use-grid-sync';
-import { inputClass } from '@/lib/utils';
+import { sheetInputClass } from '@/lib/utils';
 
 export type ColDef<T extends Record<string, unknown>> = {
   key: keyof T & string;
@@ -29,6 +29,10 @@ type Props<T extends GridRow> = {
   exportFilename?: string;
   importMap?: (raw: Record<string, unknown>) => Partial<T>;
   minHeight?: string;
+  /** Override primary action label (defaults to t('saveAll')). */
+  saveLabel?: string;
+  /** When true, show unsaved-changes hint instead of misleading pending count alone. */
+  dirty?: boolean;
 };
 
 function cellDisplayValue(val: unknown, type?: ColDef<GridRow>['type']) {
@@ -62,7 +66,7 @@ function rowMatchesSearch<T extends GridRow>(row: T, columns: ColDef<T>[], query
 }
 
 export function SpreadsheetGrid<T extends GridRow>({
-  columns, rows, onRowsChange, onSave, saving, lang, t, exportFilename, importMap, minHeight = '420px',
+  columns, rows, onRowsChange, onSave, saving, lang, t, exportFilename, importMap, minHeight = '420px', saveLabel, dirty,
 }: Props<T>) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
@@ -208,10 +212,12 @@ export function SpreadsheetGrid<T extends GridRow>({
             <FileDown size={14} />{t('exportExcel')}
           </button>
         )}
-        <span className="text-[11px] text-[hsl(var(--muted-foreground))]">{pending} {t('rowsPending')}</span>
+        <span className="text-[11px] text-[hsl(var(--muted-foreground))]">
+          {dirty ? t('unsavedChanges') : `${pending} ${t('rowsPending')}`}
+        </span>
         <span className="hidden text-[11px] text-[hsl(var(--muted-foreground))] sm:inline">· {t('pasteHint')}</span>
         <button type="button" disabled={saving} onClick={() => void onSave()} className="btn-primary ml-auto flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold disabled:opacity-60">
-          <Save size={14} />{saving ? '...' : t('saveAll')}
+          <Save size={14} />{saving ? '...' : (saveLabel ?? t('saveAll'))}
         </button>
       </div>
       <div className="mobile-scroll" style={{ maxHeight: minHeight, overflow: 'auto' }}>
@@ -253,7 +259,7 @@ export function SpreadsheetGrid<T extends GridRow>({
                           data-col={col.key}
                           value={String(val ?? '')}
                           onChange={(e) => updateCell(row._key, col.key, e.target.value)}
-                          className={`${inputClass} h-10 cursor-pointer`}
+                          className={`${sheetInputClass} h-10 cursor-pointer`}
                           dir={lang === 'ar' ? 'rtl' : 'ltr'}
                         >
                           {col.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -278,7 +284,7 @@ export function SpreadsheetGrid<T extends GridRow>({
                             : e.target.value;
                           updateCell(row._key, col.key, v);
                         }}
-                        className={`${inputClass} h-10 ${isNum ? 'font-mono tabular-nums' : ''}`}
+                        className={`${sheetInputClass} h-10 ${isNum ? 'font-mono tabular-nums' : ''}`}
                         dir={isNum || col.type === 'date' || col.type === 'time' ? 'ltr' : (lang === 'ar' ? 'rtl' : 'ltr')}
                         style={isNum ? { textAlign: lang === 'ar' ? 'right' : 'left' } : undefined}
                       />

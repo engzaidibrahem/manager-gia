@@ -52,6 +52,28 @@ const STATEMENTS = [
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`,
+  `CREATE TABLE IF NOT EXISTS daily_cash_balances (
+  id SERIAL PRIMARY KEY,
+  business_date DATE NOT NULL UNIQUE,
+  opening_balance NUMERIC(14, 2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
+  `CREATE TABLE IF NOT EXISTS capital_entries (
+  id SERIAL PRIMARY KEY,
+  entry_date DATE NOT NULL,
+  entry_type TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  amount NUMERIC(14, 2) NOT NULL,
+  actor TEXT NOT NULL,
+  user_id INTEGER,
+  status TEXT NOT NULL DEFAULT 'active',
+  voided_at TIMESTAMPTZ,
+  voided_by TEXT,
+  void_reason TEXT,
+  client_request_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
   `CREATE TABLE IF NOT EXISTS employees (
   id SERIAL PRIMARY KEY,
   full_name TEXT NOT NULL,
@@ -87,6 +109,22 @@ const STATEMENTS = [
   inventory_item_id INTEGER,
   destination TEXT NOT NULL DEFAULT 'warehouse',
   add_to_stock TEXT NOT NULL DEFAULT 'yes',
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
+  `CREATE TABLE IF NOT EXISTS purchase_payments (
+  id SERIAL PRIMARY KEY,
+  purchase_id INTEGER NOT NULL REFERENCES daily_purchases(id),
+  amount NUMERIC(14, 2) NOT NULL,
+  payment_date DATE NOT NULL,
+  payment_method TEXT NOT NULL DEFAULT 'Transfer',
+  actor TEXT NOT NULL,
+  user_id INTEGER,
+  status TEXT NOT NULL DEFAULT 'active',
+  voided_at TIMESTAMPTZ,
+  voided_by TEXT,
+  void_reason TEXT,
+  client_request_id TEXT,
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`,
@@ -165,6 +203,15 @@ const STATEMENTS = [
   archive_id INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`,
+  `CREATE TABLE IF NOT EXISTS app_users (
+  id SERIAL PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'viewer',
+  active TEXT NOT NULL DEFAULT 'yes',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
 ];
 
 const MIGRATIONS = [
@@ -175,15 +222,66 @@ const MIGRATIONS = [
   `ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT 'warehouse'`,
   `ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS purchase_id INTEGER`,
   `ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS lot_id INTEGER`,
+  `ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(12, 2) NOT NULL DEFAULT 0`,
+  `ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS from_location TEXT`,
+  `ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS to_location TEXT`,
+  `ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS base_quantity NUMERIC(12, 4)`,
+  `ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS unit TEXT`,
+  `ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS method TEXT`,
+  `ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS user_id INTEGER`,
+  `ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS reversal_of_id INTEGER`,
+  `ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS lot_allocations TEXT`,
+  `ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`,
   `ALTER TABLE daily_purchases ADD COLUMN IF NOT EXISTS destination TEXT NOT NULL DEFAULT 'warehouse'`,
+  `ALTER TABLE daily_purchases ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ordered'`,
+  `ALTER TABLE daily_purchases ADD COLUMN IF NOT EXISTS quantity_received NUMERIC(12, 2) NOT NULL DEFAULT 0`,
+  `ALTER TABLE daily_purchases ADD COLUMN IF NOT EXISTS invoice_number TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE warehouse_lots ADD COLUMN IF NOT EXISTS purchase_id INTEGER`,
   `UPDATE daily_purchases SET destination = 'warehouse' WHERE add_to_stock = 'yes' AND (destination IS NULL OR destination = '')`,
   `UPDATE daily_purchases SET destination = 'none' WHERE add_to_stock = 'no' AND destination = 'warehouse' AND (inventory_item_id IS NULL)`,
+  `UPDATE daily_purchases SET status = 'received', quantity_received = quantity WHERE destination IN ('warehouse','kitchen') AND inventory_item_id IS NOT NULL AND (status IS NULL OR status = 'ordered') AND quantity_received = 0`,
   `UPDATE inventory_items SET qr_token = 'gia-' || id::text || '-' || substr(md5(random()::text || id::text), 1, 12) WHERE qr_token IS NULL OR qr_token = ''`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS attendance_employee_date_uidx ON attendance (employee_id, attendance_date)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS inventory_items_qr_token_uidx ON inventory_items (qr_token)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS capital_entries_client_request_uidx ON capital_entries (client_request_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS purchase_payments_client_request_uidx ON purchase_payments (client_request_id)`,
+  `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`,
+  `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ`,
+  `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS voided_by TEXT`,
+  `ALTER TABLE expenses ADD COLUMN IF NOT EXISTS void_reason TEXT`,
+  `ALTER TABLE income ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`,
+  `ALTER TABLE income ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ`,
+  `ALTER TABLE income ADD COLUMN IF NOT EXISTS voided_by TEXT`,
+  `ALTER TABLE income ADD COLUMN IF NOT EXISTS void_reason TEXT`,
+  `CREATE TABLE IF NOT EXISTS purchase_payments (
+  id SERIAL PRIMARY KEY,
+  purchase_id INTEGER NOT NULL REFERENCES daily_purchases(id),
+  amount NUMERIC(14, 2) NOT NULL,
+  payment_date DATE NOT NULL,
+  payment_method TEXT NOT NULL DEFAULT 'Transfer',
+  actor TEXT NOT NULL,
+  user_id INTEGER,
+  status TEXT NOT NULL DEFAULT 'active',
+  voided_at TIMESTAMPTZ,
+  voided_by TEXT,
+  void_reason TEXT,
+  client_request_id TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
 ];
 
 export async function bootstrapSchema(database: AppDatabase): Promise<void> {
   for (const statement of STATEMENTS) {
-    await database.execute(sql.raw(statement));
+    try {
+      await database.execute(sql.raw(statement));
+    } catch (err) {
+      // Concurrent CREATE TABLE IF NOT EXISTS can race on pg_type unique index (23505).
+      const code = (err as { cause?: { code?: string }; code?: string })?.cause?.code
+        ?? (err as { code?: string })?.code;
+      if (code === "23505") continue;
+      throw err;
+    }
   }
   for (const statement of MIGRATIONS) {
     try {

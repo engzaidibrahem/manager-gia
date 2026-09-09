@@ -43,7 +43,6 @@ export function WastePage({ lang }: { lang: Lang }) {
   const items = itemsQuery.data ?? [];
   const wasteQuery = useQuery({ queryKey: ['waste', date], queryFn: () => listWaste(date) });
   const waste = wasteQuery.data ?? [];
-  const [deleteIds, setDeleteIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState('');
 
@@ -102,15 +101,20 @@ export function WastePage({ lang }: { lang: Lang }) {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Only NEW rows — saved waste is immutable (no deleteIds)
       const payload = rows
-        .filter((r) => r.inventoryItemId !== '0' && num(r.quantity) > 0 && r.actor.trim())
-        .map(({ _key, _selected, quantity, ...rest }) => ({
+        .filter((r) => !r.id && r.inventoryItemId !== '0' && num(r.quantity) > 0 && r.actor.trim())
+        .map(({ _key, _selected, quantity, id: _id, ...rest }) => ({
           ...rest,
           inventoryItemId: Number(rest.inventoryItemId),
           quantity: num(quantity),
         }));
-      await bulkSaveWaste(payload, deleteIds);
-      setDeleteIds([]);
+      if (!payload.length) {
+        setFlash(lang === 'id' ? 'Tidak ada waste baru untuk disimpan' : 'لا يوجد هدر جديد للحفظ');
+        window.setTimeout(() => setFlash(''), 2500);
+        return;
+      }
+      await bulkSaveWaste(payload);
       markClean();
       await wasteQuery.refetch();
       await qc.invalidateQueries({ queryKey: getListInventoryItemsQueryKey({}) });
@@ -129,8 +133,14 @@ export function WastePage({ lang }: { lang: Lang }) {
     markDirty();
     setRows((prev) => {
       const resolved = resolveRows(prev, next);
-      const removed = prev.filter((r) => r.id && !resolved.find((n) => n._key === r._key));
-      setDeleteIds((ids) => [...ids, ...removed.map((r) => r.id!).filter((id) => !ids.includes(id))]);
+      const removedSaved = prev.filter((r) => r.id && !resolved.find((n) => n._key === r._key));
+      if (removedSaved.length) {
+        setFlash(lang === 'id'
+          ? 'Catatan waste tidak bisa dihapus. Gunakan reverse movement untuk koreksi.'
+          : 'سجلات الهدر غير قابلة للحذف. استخدم عكس الحركة للتصحيح.');
+        window.setTimeout(() => setFlash(''), 4000);
+        return prev;
+      }
       return resolved;
     });
   };

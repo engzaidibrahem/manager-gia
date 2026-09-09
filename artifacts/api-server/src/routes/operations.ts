@@ -9,14 +9,33 @@ import {
   employeesTable,
   expensesTable,
   incomeTable,
+  dailyCashBalancesTable,
   inventoryItemsTable,
   inventoryMovementsTable,
   menuRecipesTable,
+  purchasePaymentsTable,
   recipeLinesTable,
   warehouseDayArchivesTable,
   warehouseLotsTable,
   wasteRecordsTable,
 } from "@workspace/db";
+
+import {
+  assertRecipeLineCompatible,
+  computeRecipeLineCost,
+  computeRecipeTotals,
+  convertToItemUnit,
+} from "../lib/recipe-cost";
+import { toErrorResponse, AppError } from "../lib/errors";
+import { convertToBaseUnit } from "../lib/units";
+import {
+  reverseMovement,
+} from "../services/inventoryService";
+import { transferStock } from "../services/transferService";
+import { receiveIntoWarehouse, receivePurchase } from "../services/receivingService";
+import { upsertPurchases } from "../services/purchaseService";
+import { getInventoryValue, getTodayPurchasesSummary } from "../services/financeQueryService";
+import { backfillLegacyLots, getLotReconciliationReport } from "../services/lotReconciliation";
 
 const router: IRouter = Router();
 const iso = (value: Date) => value.toISOString();
@@ -24,60 +43,7 @@ const newQrToken = () => `gia-${crypto.randomUUID().replace(/-/g, "").slice(0, 1
 
 type Location = "warehouse" | "kitchen";
 
-/** Convert qty in `fromUnit` into inventory item base unit (`itemUnit`). */
-export function convertToItemUnit(qty: number, fromUnit: string, itemUnit: string): number {
-  const from = fromUnit.trim().toLowerCase();
-  const to = itemUnit.trim().toLowerCase();
-  if (from === to) return qty;
-
-  const toBase: Record<string, { dim: "mass" | "vol" | "count"; factor: number }> = {
-    kg: { dim: "mass", factor: 1000 },
-    g: { dim: "mass", factor: 1 },
-    gram: { dim: "mass", factor: 1 },
-    grams: { dim: "mass", factor: 1 },
-    l: { dim: "vol", factor: 1000 },
-    liter: { dim: "vol", factor: 1000 },
-    litre: { dim: "vol", factor: 1000 },
-    ml: { dim: "vol", factor: 1 },
-    pcs: { dim: "count", factor: 1 },
-    pc: { dim: "count", factor: 1 },
-    buah: { dim: "count", factor: 1 },
-    unit: { dim: "count", factor: 1 },
-  };
-
-  const a = toBase[from];
-  const b = toBase[to];
-  if (!a || !b || a.dim !== b.dim) {
-    // fallback: treat as same unit
-    return qty;
-  }
-  return (qty * a.factor) / b.factor;
-}
-
-async function applyLocationDelta(
-  tx: typeof db,
-  itemId: number,
-  location: Location,
-  delta: number,
-  opts?: { costPerUnit?: number },
-) {
-  const item = await tx.query.inventoryItemsTable.findFirst({ where: eq(inventoryItemsTable.id, itemId) });
-  if (!item) throw new Error(`Item ${itemId} not found`);
-  const field = location === "kitchen" ? "kitchenStock" : "currentStock";
-  const next = Number(item[field]) + delta;
-  if (next < -0.0001) {
-    throw new Error(`Insufficient ${location} stock for ${item.name}`);
-  }
-  const patch: Record<string, unknown> = {
-    [field]: Math.max(0, next),
-    updatedAt: new Date(),
-  };
-  if (opts?.costPerUnit != null && opts.costPerUnit >= 0) {
-    patch.costPerUnit = opts.costPerUnit;
-  }
-  await tx.update(inventoryItemsTable).set(patch).where(eq(inventoryItemsTable.id, itemId));
-  return item;
-}
+export { convertToItemUnit };
 
 const inventoryRowSchema = z.object({
   id: z.number().optional(),
@@ -98,6 +64,7 @@ function serializeInv(item: typeof inventoryItemsTable.$inferSelect) {
     brand: item.brand ?? "",
     variant: item.variant ?? "",
     qrToken: item.qrToken || "",
+    archivedAt: item.archivedAt ? iso(item.archivedAt) : null,
     updatedAt: iso(item.updatedAt),
   };
 }
@@ -108,55 +75,57 @@ router.post("/inventory/items/bulk-save", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const saved = await db.transaction(async (tx) => {
-    if (parsed.data.deleteIds?.length) {
-      await tx.delete(recipeLinesTable).where(inArray(recipeLinesTable.inventoryItemId, parsed.data.deleteIds));
-      await tx.delete(wasteRecordsTable).where(inArray(wasteRecordsTable.inventoryItemId, parsed.data.deleteIds));
-      await tx.delete(warehouseLotsTable).where(inArray(warehouseLotsTable.itemId, parsed.data.deleteIds));
-      await tx.delete(inventoryMovementsTable).where(inArray(inventoryMovementsTable.itemId, parsed.data.deleteIds));
-      await tx.delete(inventoryItemsTable).where(inArray(inventoryItemsTable.id, parsed.data.deleteIds));
-    }
-    const results = [];
-    for (const row of parsed.data.rows) {
-      if (row.id) {
-        const existing = await tx.query.inventoryItemsTable.findFirst({ where: eq(inventoryItemsTable.id, row.id) });
-        if (!existing) continue;
-        const payload = {
-          name: row.name,
-          category: row.category,
-          unit: row.unit,
-          brand: row.brand ?? existing.brand ?? "",
-          variant: row.variant ?? existing.variant ?? "",
-          minimumStock: row.minimumStock,
-          costPerUnit: row.costPerUnit ?? existing.costPerUnit,
-          // Keep live balances unless explicitly sent (adjustments)
-          ...(row.currentStock != null ? { currentStock: row.currentStock } : {}),
-          ...(row.kitchenStock != null ? { kitchenStock: row.kitchenStock } : {}),
-          updatedAt: new Date(),
-          qrToken: existing.qrToken || newQrToken(),
-        };
-        const [updated] = await tx.update(inventoryItemsTable).set(payload)
-          .where(eq(inventoryItemsTable.id, row.id)).returning();
-        if (updated) results.push(updated);
-      } else {
-        const [created] = await tx.insert(inventoryItemsTable).values({
-          name: row.name,
-          category: row.category,
-          unit: row.unit,
-          brand: row.brand ?? "",
-          variant: row.variant ?? "",
-          qrToken: newQrToken(),
-          currentStock: row.currentStock ?? 0,
-          kitchenStock: row.kitchenStock ?? 0,
-          minimumStock: row.minimumStock,
-          costPerUnit: row.costPerUnit ?? 0,
-        }).returning();
-        results.push(created);
+  try {
+    const { archiveItems } = await import("../services/inventoryService");
+    const saved = await db.transaction(async (tx) => {
+      if (parsed.data.deleteIds?.length) {
+        // Soft-archive only — never destroy movements/lots/waste history
+        await archiveItems(tx, parsed.data.deleteIds);
       }
-    }
-    return results;
-  });
-  res.json(saved.map(serializeInv));
+      const results = [];
+      for (const row of parsed.data.rows) {
+        if (row.id) {
+          const existing = await tx.query.inventoryItemsTable.findFirst({ where: eq(inventoryItemsTable.id, row.id) });
+          if (!existing) continue;
+          if (existing.archivedAt) continue; // do not revive via bulk metadata unless explicit unarchive API
+          const payload = {
+            name: row.name,
+            category: row.category,
+            unit: row.unit,
+            brand: row.brand ?? existing.brand ?? "",
+            variant: row.variant ?? existing.variant ?? "",
+            minimumStock: row.minimumStock,
+            costPerUnit: row.costPerUnit ?? existing.costPerUnit,
+            // Stock is Inventory Core only — ignore client stock fields on update
+            updatedAt: new Date(),
+            qrToken: existing.qrToken || newQrToken(),
+          };
+          const [updated] = await tx.update(inventoryItemsTable).set(payload)
+            .where(eq(inventoryItemsTable.id, row.id)).returning();
+          if (updated) results.push(updated);
+        } else {
+          const [created] = await tx.insert(inventoryItemsTable).values({
+            name: row.name,
+            category: row.category,
+            unit: row.unit,
+            brand: row.brand ?? "",
+            variant: row.variant ?? "",
+            qrToken: newQrToken(),
+            currentStock: 0,
+            kitchenStock: 0,
+            minimumStock: row.minimumStock,
+            costPerUnit: row.costPerUnit ?? 0,
+          }).returning();
+          results.push(created);
+        }
+      }
+      return results;
+    });
+    res.json(saved.map(serializeInv));
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
 });
 
 const movementRowSchema = z.object({
@@ -176,46 +145,70 @@ router.post("/inventory/movements/bulk-save", async (req, res): Promise<void> =>
     return;
   }
   try {
+    if (parsed.data.deleteIds?.length) {
+      res.status(400).json({
+        error: "Deleting movements is not allowed. Use POST /inventory/movements/:id/reverse instead.",
+        code: "VALIDATION_ERROR",
+      });
+      return;
+    }
+    const { actorFrom } = await import("../auth/middleware");
+    const { adjustStock } = await import("../services/inventoryService");
     const saved = await db.transaction(async (tx) => {
-      if (parsed.data.deleteIds?.length) {
-        await tx.delete(inventoryMovementsTable).where(inArray(inventoryMovementsTable.id, parsed.data.deleteIds));
-      }
       const results = [];
       for (const row of parsed.data.rows) {
         if (row.id) continue;
         if (row.type === "transfer") {
-          throw new Error("Use /inventory/transfers/bulk-save for transfers");
+          throw new Error("Use /inventory/transfers for transfers");
         }
+        const actor = actorFrom(req, row.actor);
         const location: Location = row.type === "kitchen"
           ? "kitchen"
           : (row.location ?? "warehouse");
-        const delta = row.type === "in" || row.type === "adjustment" ? row.quantity : -row.quantity;
-        const item = await applyLocationDelta(tx as typeof db, row.itemId, location, delta);
-        const [created] = await tx.insert(inventoryMovementsTable).values({
+
+        if (row.type === "in") {
+          const received = await receiveIntoWarehouse({
+            itemId: row.itemId,
+            quantity: row.quantity,
+            note: row.note,
+            actor,
+            userId: req.user?.id ?? null,
+          }, tx);
+          results.push({ ...received.movement, itemName: received.item.name, unit: received.item.unit });
+          continue;
+        }
+
+        const signedQty = row.type === "adjustment" ? row.quantity : -row.quantity;
+        const result = await adjustStock(tx, {
           itemId: row.itemId,
-          type: row.type,
           location,
-          quantity: row.quantity,
-          note: row.note ?? "",
-          actor: row.actor,
-        }).returning();
-        results.push({ ...created, itemName: item.name, unit: item.unit });
+          quantity: signedQty,
+          note: row.note ?? row.type,
+          actor,
+          userId: req.user?.id ?? null,
+        });
+        results.push({ ...result.movement, itemName: result.item.name, unit: result.item.unit });
       }
       return results;
     });
     res.json(saved.map((row) => ({ ...row, createdAt: iso(row.createdAt) })));
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Bulk save failed" });
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
   }
 });
 
 const transferRowSchema = z.object({
-  itemId: z.number(),
+  itemId: z.number().optional(),
+  qrToken: z.string().optional(),
   quantity: z.number().positive(),
-  actor: z.string().min(1),
+  unit: z.string().optional(),
+  actor: z.string().optional(),
   note: z.string().optional(),
   from: z.enum(["warehouse", "kitchen"]).default("warehouse"),
   to: z.enum(["warehouse", "kitchen"]).default("kitchen"),
+  lotId: z.number().optional().nullable(),
+  method: z.string().optional(),
 });
 
 router.post("/inventory/transfers/bulk-save", async (req, res): Promise<void> => {
@@ -225,27 +218,155 @@ router.post("/inventory/transfers/bulk-save", async (req, res): Promise<void> =>
     return;
   }
   try {
-    const saved = await db.transaction(async (tx) => {
-      const results = [];
-      for (const row of parsed.data.rows) {
-        if (row.from === row.to) throw new Error("Transfer from/to must differ");
-        const item = await applyLocationDelta(tx as typeof db, row.itemId, row.from, -row.quantity);
-        await applyLocationDelta(tx as typeof db, row.itemId, row.to, row.quantity);
-        const [created] = await tx.insert(inventoryMovementsTable).values({
-          itemId: row.itemId,
-          type: "transfer",
-          location: row.to,
-          quantity: row.quantity,
-          note: row.note ?? `${row.from} → ${row.to}`,
-          actor: row.actor,
-        }).returning();
-        results.push({ ...created, itemName: item.name, unit: item.unit, from: row.from, to: row.to });
-      }
-      return results;
-    });
-    res.json(saved.map((row) => ({ ...row, createdAt: iso(row.createdAt) })));
+    const { actorFrom } = await import("../auth/middleware");
+    const results = [];
+    for (const row of parsed.data.rows) {
+      if (!row.itemId && !row.qrToken) throw new Error("itemId or qrToken required");
+      const result = await transferStock({
+        itemId: row.itemId,
+        qrToken: row.qrToken,
+        quantity: row.quantity,
+        unit: row.unit,
+        from: row.from,
+        to: row.to,
+        note: row.note,
+        actor: actorFrom(req),
+        userId: req.user?.id ?? null,
+        method: row.method ?? "bulk",
+        lotId: row.lotId,
+      });
+      results.push({
+        id: result.movementId,
+        itemId: result.itemId,
+        type: "transfer",
+        location: result.to,
+        quantity: result.quantity,
+        note: `${result.from} → ${result.to}`,
+        actor: actorFrom(req),
+        itemName: result.item,
+        unit: result.unit,
+        from: result.from,
+        to: result.to,
+        createdAt: result.timestamp,
+      });
+    }
+    res.json(results);
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Transfer failed" });
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+/** Warehouse Opening Balance — owner/manager only (roles.ts blocks warehouse writes). */
+const openingBalanceSchema = z.object({
+  lines: z.array(z.object({
+    itemId: z.number().int().positive(),
+    quantity: z.number().positive(),
+    unit: z.string().optional(),
+    unitCost: z.number().min(0).optional(),
+    brand: z.string().optional(),
+    note: z.string().optional(),
+  })).min(1),
+  asOfDate: z.string().optional(),
+  notes: z.string().optional(),
+  allowDuplicateItems: z.boolean().optional(),
+  clientRequestId: z.string().min(8).max(80).optional(),
+});
+
+router.post("/inventory/opening-balance", async (req, res): Promise<void> => {
+  const parsed = openingBalanceSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message, code: "VALIDATION_ERROR" });
+    return;
+  }
+  const body = req.body as Record<string, unknown>;
+  if (body.currentStock != null || body.kitchenStock != null || body.actorId != null || body.actor != null) {
+    res.status(400).json({
+      error: "Do not send stock balances or actor identity; the server uses the authenticated session.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { postWarehouseOpeningBalance } = await import("../services/openingBalanceService");
+    const result = await postWarehouseOpeningBalance({
+      ...parsed.data,
+      actor: actorFrom(req),
+      userId: req.user?.id ?? null,
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+/** Canonical single transfer (Web + Mobile). */
+router.post("/inventory/transfers", async (req, res): Promise<void> => {
+  const parsed = transferRowSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({
+      success: false,
+      code: "VALIDATION_ERROR",
+      error: parsed.error.message,
+      message: parsed.error.message,
+    });
+    return;
+  }
+  // Mobile must not send authoritative stock / actor identity
+  const body = req.body as Record<string, unknown>;
+  if (
+    body.currentStock != null
+    || body.kitchenStock != null
+    || body.warehouseStock != null
+    || body.actorId != null
+  ) {
+    res.status(400).json({
+      success: false,
+      code: "VALIDATION_ERROR",
+      error: "Do not send stock balances or actorId; the server derives them from inventory + session.",
+      message: "Do not send stock balances or actorId; the server derives them from inventory + session.",
+    });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const result = await transferStock({
+      ...parsed.data,
+      actor: actorFrom(req),
+      userId: req.user?.id ?? null,
+      method: parsed.data.method ?? (parsed.data.qrToken ? "qr" : "manual"),
+    });
+    const remainingSourceStock = result.from === "warehouse" ? result.warehouseStock : result.kitchenStock;
+    const remainingDestinationStock = result.to === "warehouse" ? result.warehouseStock : result.kitchenStock;
+    res.status(201).json({
+      success: true,
+      item: {
+        id: result.itemId,
+        name: result.item,
+        unit: result.unit,
+      },
+      source: result.from.toUpperCase(),
+      destination: result.to.toUpperCase(),
+      quantity: result.quantity,
+      unit: result.unit.toUpperCase(),
+      remainingSourceStock,
+      remainingDestinationStock,
+      warehouseStock: result.warehouseStock,
+      kitchenStock: result.kitchenStock,
+      movementId: result.movementId,
+      timestamp: result.timestamp,
+    });
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json({
+      success: false,
+      code: mapped.body.code ?? "TRANSFER_FAILED",
+      error: mapped.body.error,
+      message: mapped.body.error,
+      details: mapped.body.details,
+    });
   }
 });
 
@@ -302,56 +423,55 @@ router.get("/inventory/receipts", async (req, res): Promise<void> => {
   res.json(rows.map(({ lot, itemName, itemUnit, category, qrToken }) => serializeLot(lot, { itemName, itemUnit, category, qrToken })));
 });
 
+/** Receiving path A — metadata edits + create via ReceivingService.receiveIntoWarehouse (same domain as purchase receive). */
 router.post("/inventory/receipts/bulk-save", async (req, res): Promise<void> => {
   const parsed = z.object({
-    rows: z.array(receiptRowSchema),
+    rows: z.array(receiptRowSchema.extend({ unit: z.string().optional() })),
     deleteIds: z.array(z.number()).optional(),
   }).safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  if (parsed.data.deleteIds?.length) {
+    res.status(400).json({
+      error: "Deleting receipt lots is not allowed. Use movement reverse / adjustment to correct stock.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
   try {
+    const { actorFrom } = await import("../auth/middleware");
     const saved = await db.transaction(async (tx) => {
-      if (parsed.data.deleteIds?.length) {
-        const doomed = await tx.select().from(warehouseLotsTable).where(inArray(warehouseLotsTable.id, parsed.data.deleteIds));
-        for (const lot of doomed) {
-          if (lot.archiveId) throw new Error(`Lot #${lot.id} already archived — cannot delete`);
-          await applyLocationDelta(tx as typeof db, lot.itemId, "warehouse", -Number(lot.quantityRemaining));
-        }
-        await tx.delete(warehouseLotsTable).where(inArray(warehouseLotsTable.id, parsed.data.deleteIds));
-      }
       const results = [];
       for (const row of parsed.data.rows) {
         const item = await tx.query.inventoryItemsTable.findFirst({ where: eq(inventoryItemsTable.id, row.itemId) });
         if (!item) throw new Error(`Item ${row.itemId} not found`);
         const brand = (row.brand ?? item.brand ?? "").trim();
         const cost = row.costPerUnit ?? Number(item.costPerUnit) ?? 0;
-        const actor = (row.actor ?? "").trim() || "warehouse";
+        const actor = actorFrom(req, row.actor);
+        const unit = (row as { unit?: string }).unit?.trim() || item.unit;
+        const qtyBase = convertToBaseUnit(row.quantity, unit, item.unit);
 
         if (row.id) {
           const existing = await tx.query.warehouseLotsTable.findFirst({ where: eq(warehouseLotsTable.id, row.id) });
           if (!existing) continue;
           if (existing.archiveId) throw new Error(`Lot #${row.id} already archived — cannot edit`);
-          const used = Number(existing.quantityReceived) - Number(existing.quantityRemaining);
-          if (row.quantity < used - 0.0001) {
-            throw new Error(`Lot #${row.id}: quantity cannot be less than already issued (${used})`);
+          // Quantity is immutable after receive — use movement reverse/correction for stock fixes
+          const qtyChanged = Math.abs(qtyBase - Number(existing.quantityReceived)) > 0.0001;
+          if (qtyChanged) {
+            throw new AppError(
+              "VALIDATION_ERROR",
+              `Receipt lot #${row.id} quantity is immutable after receiving. Reverse the original receive movement (or create a correction), then receive again if needed.`,
+            );
           }
-          const newRemaining = row.quantity - used;
-          const delta = newRemaining - Number(existing.quantityRemaining);
           const [updated] = await tx.update(warehouseLotsTable).set({
-            itemId: row.itemId,
-            receiptDate: row.receiptDate,
             brand,
-            quantityReceived: row.quantity,
-            quantityRemaining: newRemaining,
             costPerUnit: cost,
             actor,
-            note: row.note ?? "",
+            note: row.note ?? existing.note ?? "",
+            // metadata only — quantityReceived / quantityRemaining unchanged
           }).where(eq(warehouseLotsTable.id, row.id)).returning();
-          if (delta !== 0) {
-            await applyLocationDelta(tx as typeof db, row.itemId, "warehouse", delta);
-          }
           if (cost > 0 || brand) {
             await tx.update(inventoryItemsTable).set({
               ...(cost > 0 ? { costPerUnit: cost } : {}),
@@ -363,37 +483,29 @@ router.post("/inventory/receipts/bulk-save", async (req, res): Promise<void> => 
             results.push(serializeLot(updated, { itemName: item.name, itemUnit: item.unit, category: item.category, qrToken: item.qrToken }));
           }
         } else {
-          const [created] = await tx.insert(warehouseLotsTable).values({
+          const received = await receiveIntoWarehouse({
             itemId: row.itemId,
-            receiptDate: row.receiptDate,
+            quantity: qtyBase,
+            unit: item.unit,
+            unitCost: cost,
             brand,
-            quantityReceived: row.quantity,
-            quantityRemaining: row.quantity,
-            costPerUnit: cost,
-            actor,
             note: row.note ?? "",
-          }).returning();
-          await applyLocationDelta(tx as typeof db, row.itemId, "warehouse", row.quantity, cost > 0 ? { costPerUnit: cost } : undefined);
+            actor,
+            userId: req.user?.id ?? null,
+            receiptDate: row.receiptDate,
+          }, tx as never);
           if (brand) {
             await tx.update(inventoryItemsTable).set({ brand, updatedAt: new Date() }).where(eq(inventoryItemsTable.id, row.itemId));
           }
-          await tx.insert(inventoryMovementsTable).values({
-            itemId: row.itemId,
-            type: "in",
-            location: "warehouse",
-            quantity: row.quantity,
-            note: row.note ?? `Receipt lot #${created.id}${brand ? ` · ${brand}` : ""}`,
-            actor,
-            lotId: created.id,
-          });
-          results.push(serializeLot(created, { itemName: item.name, itemUnit: item.unit, category: item.category, qrToken: item.qrToken }));
+          results.push(serializeLot(received.lot, { itemName: item.name, itemUnit: item.unit, category: item.category, qrToken: item.qrToken }));
         }
       }
       return results;
     });
     res.json(saved);
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Receipt save failed" });
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
   }
 });
 
@@ -420,6 +532,37 @@ router.get("/inventory/lots", async (req, res): Promise<void> => {
     ? mapped.filter((r) => `${r.itemName} ${r.brand} ${r.category}`.toLowerCase().includes(q))
     : mapped;
   res.json(filtered);
+});
+
+router.get("/inventory/lots/reconcile", async (_req, res): Promise<void> => {
+  res.json(await getLotReconciliationReport());
+});
+
+/** DATA MIGRATION TOOL — owner/manager only. Does not change stock balances. */
+router.post("/inventory/lots/backfill-legacy", async (req, res): Promise<void> => {
+  const role = req.user?.role;
+  if (role !== "owner" && role !== "manager") {
+    res.status(403).json({
+      success: false,
+      code: "UNAUTHORIZED_OPERATION",
+      error: "You do not have permission to perform this operation.",
+      message: "Legacy backfill is a data-migration tool restricted to owner/manager.",
+    });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const dryRun = req.query.dryRun === "1" || req.query.dryRun === "true" || req.body?.dryRun === true;
+    const report = await backfillLegacyLots({
+      actor: actorFrom(req),
+      userId: req.user?.id ?? null,
+      dryRun,
+    });
+    res.json({ success: true, ...report });
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json({ success: false, ...mapped.body, message: mapped.body.error });
+  }
 });
 
 router.get("/inventory/items/by-qr/:token", async (req, res): Promise<void> => {
@@ -455,6 +598,7 @@ router.get("/inventory/items/search", async (req, res): Promise<void> => {
     )`);
   }
   if (withStock) filters.push(sql`${inventoryItemsTable.currentStock} > 0`);
+  filters.push(sql`${inventoryItemsTable.archivedAt} IS NULL`);
   const items = await db.select().from(inventoryItemsTable)
     .where(filters.length ? and(...filters) : undefined)
     .orderBy(asc(inventoryItemsTable.name))
@@ -467,7 +611,8 @@ const issueSchema = z.object({
   qrToken: z.string().optional(),
   lotId: z.number().optional().nullable(),
   quantity: z.number().positive(),
-  actor: z.string().min(1),
+  unit: z.string().optional(),
+  actor: z.string().optional(),
   note: z.string().optional(),
 });
 
@@ -478,70 +623,180 @@ router.post("/inventory/issue-to-kitchen", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const result = await db.transaction(async (tx) => {
-      let item = parsed.data.itemId
-        ? await tx.query.inventoryItemsTable.findFirst({ where: eq(inventoryItemsTable.id, parsed.data.itemId) })
-        : null;
-      if (!item && parsed.data.qrToken) {
-        item = await tx.query.inventoryItemsTable.findFirst({ where: eq(inventoryItemsTable.qrToken, parsed.data.qrToken) });
-      }
-      if (!item) throw new Error("Item not found");
-
-      let lotId: number | null = parsed.data.lotId ?? null;
-      if (lotId) {
-        const lot = await tx.query.warehouseLotsTable.findFirst({ where: eq(warehouseLotsTable.id, lotId) });
-        if (!lot || lot.itemId !== item.id) throw new Error("Lot not found for item");
-        if (Number(lot.quantityRemaining) < parsed.data.quantity - 0.0001) {
-          throw new Error(`Insufficient lot remaining (${lot.quantityRemaining})`);
-        }
-        await tx.update(warehouseLotsTable).set({
-          quantityRemaining: Number(lot.quantityRemaining) - parsed.data.quantity,
-        }).where(eq(warehouseLotsTable.id, lot.id));
-        await applyLocationDelta(tx as typeof db, item.id, "warehouse", -parsed.data.quantity);
-      } else {
-        // FIFO across lots if any remain; else deduct item stock only
-        const openLots = await tx.select().from(warehouseLotsTable)
-          .where(and(eq(warehouseLotsTable.itemId, item.id), sql`${warehouseLotsTable.quantityRemaining} > 0`))
-          .orderBy(asc(warehouseLotsTable.receiptDate), asc(warehouseLotsTable.id));
-        if (openLots.length) {
-          let left = parsed.data.quantity;
-          for (const lot of openLots) {
-            if (left <= 0) break;
-            const take = Math.min(Number(lot.quantityRemaining), left);
-            await tx.update(warehouseLotsTable).set({
-              quantityRemaining: Number(lot.quantityRemaining) - take,
-            }).where(eq(warehouseLotsTable.id, lot.id));
-            left -= take;
-            if (!lotId) lotId = lot.id;
-          }
-          if (left > 0.0001) throw new Error("Insufficient warehouse lot stock");
-          await applyLocationDelta(tx as typeof db, item.id, "warehouse", -parsed.data.quantity);
-        } else {
-          await applyLocationDelta(tx as typeof db, item.id, "warehouse", -parsed.data.quantity);
-        }
-      }
-
-      await applyLocationDelta(tx as typeof db, item.id, "kitchen", parsed.data.quantity);
-      const [movement] = await tx.insert(inventoryMovementsTable).values({
-        itemId: item.id,
+    const { actorFrom } = await import("../auth/middleware");
+    const actor = actorFrom(req);
+    const result = await transferStock({
+      itemId: parsed.data.itemId,
+      qrToken: parsed.data.qrToken,
+      lotId: parsed.data.lotId,
+      quantity: parsed.data.quantity,
+      unit: parsed.data.unit,
+      from: "warehouse",
+      to: "kitchen",
+      note: parsed.data.note ?? "warehouse → kitchen",
+      actor,
+      userId: req.user?.id ?? null,
+      method: parsed.data.qrToken ? "qr" : "manual",
+    });
+    const item = await db.query.inventoryItemsTable.findFirst({ where: eq(inventoryItemsTable.id, result.itemId) });
+    res.status(201).json({
+      movement: {
+        id: result.movementId,
+        itemId: result.itemId,
         type: "transfer",
         location: "kitchen",
-        quantity: parsed.data.quantity,
-        note: parsed.data.note ?? "warehouse → kitchen",
-        actor: parsed.data.actor,
-        lotId,
-      }).returning();
-
-      const refreshed = await tx.query.inventoryItemsTable.findFirst({ where: eq(inventoryItemsTable.id, item.id) });
-      return {
-        movement: { ...movement, createdAt: iso(movement.createdAt) },
-        item: refreshed ? serializeInv(refreshed) : serializeInv(item),
-        lotId,
-      };
+        quantity: result.quantity,
+        note: result.from + " → " + result.to,
+        actor,
+        createdAt: result.timestamp,
+      },
+      item: item ? serializeInv(item) : null,
+      lotId: null,
+      unitCost: item ? Number(item.costPerUnit) || 0 : 0,
+      totalCost: (item ? Number(item.costPerUnit) || 0 : 0) * result.quantity,
+      success: result.success,
+      warehouseStock: result.warehouseStock,
+      kitchenStock: result.kitchenStock,
+      movementId: result.movementId,
+      quantity: result.quantity,
+      from: result.from,
+      to: result.to,
+      timestamp: result.timestamp,
     });
-    res.status(201).json(result);
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Issue failed" });
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.post("/inventory/movements/:id/reverse", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid movement id" });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const reversal = await db.transaction(async (tx) =>
+      reverseMovement(tx, id, actorFrom(req), req.user?.id ?? null),
+    );
+    res.status(201).json({ ...reversal, createdAt: iso(reversal.createdAt) });
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.get("/inventory/items/:id/history", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid item id" });
+    return;
+  }
+  const rows = await db.select().from(inventoryMovementsTable)
+    .where(eq(inventoryMovementsTable.itemId, id))
+    .orderBy(desc(inventoryMovementsTable.createdAt))
+    .limit(200);
+  res.json(rows.map((r) => ({ ...r, createdAt: iso(r.createdAt) })));
+});
+
+router.get("/inventory/low-stock", async (_req, res): Promise<void> => {
+  const items = await db.select().from(inventoryItemsTable)
+    .where(sql`${inventoryItemsTable.currentStock} <= ${inventoryItemsTable.minimumStock}`)
+    .orderBy(asc(inventoryItemsTable.name));
+  res.json(items.map(serializeInv));
+});
+
+router.post("/inventory/adjustments", async (req, res): Promise<void> => {
+  const schema = z.object({
+    itemId: z.number(),
+    location: z.enum(["warehouse", "kitchen"]),
+    quantity: z.number(),
+    unit: z.string().optional(),
+    note: z.string().optional(),
+  });
+  const parsed = schema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { adjustStock } = await import("../services/inventoryService");
+    const actor = actorFrom(req);
+    const result = await db.transaction(async (tx) =>
+      adjustStock(tx, {
+        itemId: parsed.data.itemId,
+        location: parsed.data.location,
+        quantity: parsed.data.quantity,
+        unit: parsed.data.unit,
+        note: parsed.data.note,
+        actor,
+        userId: req.user?.id ?? null,
+      }),
+    );
+    res.status(201).json({
+      movement: { ...result.movement, createdAt: iso(result.movement.createdAt) },
+      item: serializeInv(result.item),
+    });
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.post("/inventory/waste", async (req, res): Promise<void> => {
+  const schema = z.object({
+    inventoryItemId: z.number(),
+    location: z.enum(["warehouse", "kitchen"]),
+    quantity: z.number().positive(),
+    unit: z.string().optional(),
+    reason: z.enum(["spoilage", "prep", "theft", "other"]).default("spoilage"),
+    note: z.string().optional(),
+    wasteDate: z.string().optional(),
+  });
+  const parsed = schema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { wasteStock } = await import("../services/inventoryService");
+    const actor = actorFrom(req);
+    const today = new Date();
+    const wasteDate = parsed.data.wasteDate
+      || `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const saved = await db.transaction(async (tx) => {
+      const { movement, item, quantity } = await wasteStock(tx, {
+        itemId: parsed.data.inventoryItemId,
+        location: parsed.data.location,
+        quantity: parsed.data.quantity,
+        unit: parsed.data.unit,
+        note: parsed.data.note,
+        actor,
+        userId: req.user?.id ?? null,
+        reason: parsed.data.reason,
+      });
+      const costEstimate = quantity * Number(item.costPerUnit || 0);
+      const [created] = await tx.insert(wasteRecordsTable).values({
+        wasteDate,
+        wasteTime: "",
+        inventoryItemId: item.id,
+        location: parsed.data.location,
+        quantity,
+        reason: parsed.data.reason,
+        actor,
+        costEstimate,
+        notes: parsed.data.note ?? "",
+      }).returning();
+      void movement;
+      return { ...created, itemName: item.name, unit: item.unit };
+    });
+    res.status(201).json({ ...saved, createdAt: iso(saved.createdAt) });
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
   }
 });
 
@@ -647,63 +902,47 @@ router.post("/warehouse-archives/close", async (req, res): Promise<void> => {
     return;
   }
   const date = parsed.data.date ?? new Date().toISOString().slice(0, 10);
-  const closedBy = (parsed.data.closedBy || "warehouse").trim() || "warehouse";
+  const { actorFrom } = await import("../auth/middleware");
+  const closedBy = actorFrom(req, parsed.data.closedBy);
   const notes = parsed.data.notes?.trim() || null;
   const force = Boolean(parsed.data.force);
 
   try {
     const archive = await db.transaction(async (tx) => {
-      // Optional: save new/updated receipts first (delta stock)
+      // Optional: persist any pending receipt rows via ReceivingService (no raw stock writes)
       if (parsed.data.rows?.length) {
+        const { receiveIntoWarehouse } = await import("../services/receivingService");
         for (const row of parsed.data.rows) {
-          const item = await tx.query.inventoryItemsTable.findFirst({ where: eq(inventoryItemsTable.id, row.itemId) });
-          if (!item) throw new Error(`Item ${row.itemId} not found`);
-          const brand = (row.brand ?? item.brand ?? "").trim();
-          const cost = row.costPerUnit ?? Number(item.costPerUnit) ?? 0;
-          const actor = (row.actor ?? "").trim() || closedBy;
           if (row.id) {
+            // Edits of archived/open lots: quantity immutable (same rule as receipts bulk-save)
             const existing = await tx.query.warehouseLotsTable.findFirst({ where: eq(warehouseLotsTable.id, row.id) });
-            if (existing && !existing.archiveId) {
-              const used = Number(existing.quantityReceived) - Number(existing.quantityRemaining);
-              const newRemaining = row.quantity - used;
-              const delta = newRemaining - Number(existing.quantityRemaining);
-              await tx.update(warehouseLotsTable).set({
-                receiptDate: row.receiptDate || date,
-                brand,
-                quantityReceived: row.quantity,
-                quantityRemaining: newRemaining,
-                costPerUnit: cost,
-                actor,
-                note: row.note ?? "",
-              }).where(eq(warehouseLotsTable.id, row.id));
-              if (delta !== 0) {
-                await applyLocationDelta(tx as typeof db, row.itemId, "warehouse", delta);
-              }
+            if (!existing || existing.archiveId) continue;
+            const item = await tx.query.inventoryItemsTable.findFirst({ where: eq(inventoryItemsTable.id, row.itemId) });
+            if (!item) throw new Error(`Item ${row.itemId} not found`);
+            const qtyBase = convertToBaseUnit(row.quantity, item.unit, item.unit);
+            if (Math.abs(qtyBase - Number(existing.quantityReceived)) > 0.0001) {
+              throw new AppError(
+                "VALIDATION_ERROR",
+                `Receipt lot #${row.id} quantity is immutable after receiving. Reverse the original receive, then receive again if needed.`,
+              );
             }
+            await tx.update(warehouseLotsTable).set({
+              brand: (row.brand ?? item.brand ?? "").trim(),
+              costPerUnit: row.costPerUnit ?? Number(item.costPerUnit) ?? 0,
+              actor: actorFrom(req, closedBy),
+              note: row.note ?? existing.note ?? "",
+            }).where(eq(warehouseLotsTable.id, row.id));
           } else {
-            const [created] = await tx.insert(warehouseLotsTable).values({
+            await receiveIntoWarehouse({
               itemId: row.itemId,
-              receiptDate: row.receiptDate || date,
-              brand,
-              quantityReceived: row.quantity,
-              quantityRemaining: row.quantity,
-              costPerUnit: cost,
-              actor,
-              note: row.note ?? "",
-            }).returning();
-            await applyLocationDelta(tx as typeof db, row.itemId, "warehouse", row.quantity, cost > 0 ? { costPerUnit: cost } : undefined);
-            if (brand) {
-              await tx.update(inventoryItemsTable).set({ brand, updatedAt: new Date() }).where(eq(inventoryItemsTable.id, row.itemId));
-            }
-            await tx.insert(inventoryMovementsTable).values({
-              itemId: row.itemId,
-              type: "in",
-              location: "warehouse",
               quantity: row.quantity,
-              note: row.note ?? `Receipt lot #${created.id}`,
-              actor,
-              lotId: created.id,
-            });
+              unitCost: row.costPerUnit,
+              brand: row.brand,
+              note: row.note ?? "",
+              actor: actorFrom(req, closedBy),
+              userId: req.user?.id ?? null,
+              receiptDate: row.receiptDate || date,
+            }, tx as never);
           }
         }
       }
@@ -787,16 +1026,24 @@ router.post("/warehouse-archives/close", async (req, res): Promise<void> => {
 });
 
 router.post("/finance/expenses/bulk-save", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, unknown>;
+  if (body.actor != null || body.actorId != null) {
+    res.status(400).json({
+      error: "Do not send actor identity; the server uses the authenticated session.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
   const parsed = z.object({
     rows: z.array(z.object({
       id: z.number().optional(),
       expenseDate: z.string(),
       expenseTime: z.string().optional(),
-      category: z.string().min(1),
+      category: z.string().optional(),
       description: z.string().min(1),
       amount: z.number().positive(),
-      paidBy: z.string().min(1),
-      receivedBy: z.string().min(1),
+      paidBy: z.string().optional(),
+      receivedBy: z.string().optional(),
       paymentMethod: z.string().min(1),
       notes: z.string().optional(),
     })),
@@ -806,37 +1053,217 @@ router.post("/finance/expenses/bulk-save", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const saved = await db.transaction(async (tx) => {
-    if (parsed.data.deleteIds?.length) {
-      await tx.delete(expensesTable).where(inArray(expensesTable.id, parsed.data.deleteIds));
-    }
-    const results = [];
-    for (const row of parsed.data.rows) {
-      const payload = {
-        expenseDate: row.expenseDate,
-        expenseTime: row.expenseTime ?? "",
-        category: row.category,
-        description: row.description,
-        amount: row.amount,
-        paidBy: row.paidBy,
-        receivedBy: row.receivedBy,
-        paymentMethod: row.paymentMethod,
-        notes: row.notes ?? "",
-      };
-      if (row.id) {
-        const [updated] = await tx.update(expensesTable).set(payload).where(eq(expensesTable.id, row.id)).returning();
-        if (updated) results.push(updated);
-      } else {
-        const [created] = await tx.insert(expensesTable).values(payload).returning();
-        results.push(created);
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { assertExpenseNotPurchaseDuplicate } = await import("../services/purchasePaymentService");
+    const sessionActor = actorFrom(req);
+    const saved = await db.transaction(async (tx) => {
+      if (parsed.data.deleteIds?.length) {
+        await tx.update(expensesTable).set({
+          status: "voided",
+          voidedAt: new Date(),
+          voidedBy: sessionActor,
+          voidReason: "voided via bulk-save",
+        }).where(inArray(expensesTable.id, parsed.data.deleteIds));
       }
-    }
-    return results;
-  });
-  res.json(saved.map((row) => ({ ...row, createdAt: iso(row.createdAt) })));
+      const results = [];
+      for (const row of parsed.data.rows) {
+        const category = (row.category?.trim() || "Other");
+        assertExpenseNotPurchaseDuplicate(category, row.description);
+        const payload = {
+          expenseDate: row.expenseDate,
+          expenseTime: row.expenseTime ?? "",
+          category,
+          description: row.description,
+          amount: row.amount,
+          paidBy: sessionActor,
+          receivedBy: (row.receivedBy?.trim() || "-"),
+          paymentMethod: row.paymentMethod,
+          notes: row.notes ?? "",
+          status: "active" as const,
+        };
+        if (row.id) {
+          const existing = await tx.select().from(expensesTable).where(eq(expensesTable.id, row.id)).limit(1);
+          const keepActor = existing[0]?.paidBy || sessionActor;
+          const [updated] = await tx.update(expensesTable).set({
+            ...payload,
+            paidBy: keepActor,
+          }).where(eq(expensesTable.id, row.id)).returning();
+          if (updated) results.push(updated);
+        } else {
+          const [created] = await tx.insert(expensesTable).values(payload).returning();
+          results.push(created);
+        }
+      }
+      return results;
+    });
+    res.json(saved.map((row) => ({ ...row, createdAt: iso(row.createdAt) })));
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+function shiftDateISO(date: string, days: number): string {
+  const d = new Date(`${date}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+async function dayAmountSum(
+  kind: "expense" | "income" | "purchase",
+  date: string,
+): Promise<number> {
+  if (kind === "expense") {
+    const [row] = await db
+      .select({ total: sql<number>`coalesce(sum(${expensesTable.amount}), 0)` })
+      .from(expensesTable)
+      .where(and(eq(expensesTable.expenseDate, date), eq(expensesTable.status, "active")));
+    return Number(row?.total ?? 0);
+  }
+  if (kind === "purchase") {
+    const [row] = await db
+      .select({ total: sql<number>`coalesce(sum(${dailyPurchasesTable.totalAmount}), 0)` })
+      .from(dailyPurchasesTable)
+      .where(eq(dailyPurchasesTable.purchaseDate, date));
+    return Number(row?.total ?? 0);
+  }
+  const [row] = await db
+    .select({ total: sql<number>`coalesce(sum(${incomeTable.amount}), 0)` })
+    .from(incomeTable)
+    .where(and(eq(incomeTable.incomeDate, date), eq(incomeTable.status, "active")));
+  return Number(row?.total ?? 0);
+}
+
+async function resolveOpeningBalance(date: string): Promise<{
+  openingBalance: number;
+  suggestedOpening: number;
+  isManual: boolean;
+  notes: string;
+}> {
+  const prev = shiftDateISO(date, -1);
+  const [prevBalance] = await db.select().from(dailyCashBalancesTable).where(eq(dailyCashBalancesTable.businessDate, prev)).limit(1);
+  const prevOpening = prevBalance ? Number(prevBalance.openingBalance) : 0;
+  // Carry-forward from cash book: yesterday opening + income − expenses (purchases are NOT capital)
+  const prevIncome = await dayAmountSum("income", prev);
+  const prevExpenses = await dayAmountSum("expense", prev);
+  const suggestedOpening = Math.round((prevOpening + prevIncome - prevExpenses) * 100) / 100;
+
+  const [current] = await db.select().from(dailyCashBalancesTable).where(eq(dailyCashBalancesTable.businessDate, date)).limit(1);
+  if (current) {
+    return {
+      openingBalance: Number(current.openingBalance),
+      suggestedOpening,
+      isManual: true,
+      notes: current.notes ?? "",
+    };
+  }
+  return {
+    openingBalance: suggestedOpening,
+    suggestedOpening,
+    isManual: false,
+    notes: "",
+  };
+}
+
+async function upsertOpeningBalance(date: string, openingBalance: number, notes?: string) {
+  const existing = await db.select().from(dailyCashBalancesTable).where(eq(dailyCashBalancesTable.businessDate, date)).limit(1);
+  if (existing[0]) {
+    const [row] = await db.update(dailyCashBalancesTable).set({
+      openingBalance,
+      notes: notes ?? existing[0].notes ?? "",
+      updatedAt: new Date(),
+    }).where(eq(dailyCashBalancesTable.businessDate, date)).returning();
+    return row;
+  }
+  const [row] = await db.insert(dailyCashBalancesTable).values({
+    businessDate: date,
+    openingBalance,
+    notes: notes ?? "",
+  }).returning();
+  return row;
+}
+
+/** Persist today opening; cash book closing = opening + income − expenses (purchases reported separately). */
+async function saveCashDayWithCarry(date: string, openingBalance: number, notes?: string) {
+  const row = await upsertOpeningBalance(date, openingBalance, notes);
+  const totalPurchases = await dayAmountSum("purchase", date);
+  const totalIncome = await dayAmountSum("income", date);
+  const totalExpenses = await dayAmountSum("expense", date);
+  const closingBalance = Math.round((Number(row.openingBalance) + totalIncome - totalExpenses) * 100) / 100;
+  const tomorrow = shiftDateISO(date, 1);
+  await upsertOpeningBalance(tomorrow, closingBalance);
+  const balance = await resolveOpeningBalance(date);
+  return {
+    date,
+    openingBalance: Number(row.openingBalance),
+    suggestedOpening: balance.suggestedOpening,
+    isManual: true,
+    notes: row.notes ?? "",
+    totalIncome,
+    totalExpenses,
+    totalPurchases,
+    closingBalance,
+    tomorrowOpening: closingBalance,
+    tomorrowDate: tomorrow,
+  };
+}
+
+router.get("/finance/cash-day", async (req, res): Promise<void> => {
+  const date = typeof req.query.date === "string" ? req.query.date : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    res.status(400).json({ error: "date (YYYY-MM-DD) required" });
+    return;
+  }
+  try {
+    const balance = await resolveOpeningBalance(date);
+    const totalIncome = await dayAmountSum("income", date);
+    const totalExpenses = await dayAmountSum("expense", date);
+    const totalPurchases = await dayAmountSum("purchase", date);
+    const closingBalance = Math.round((balance.openingBalance + totalIncome - totalExpenses) * 100) / 100;
+    res.json({
+      date,
+      ...balance,
+      totalIncome,
+      totalExpenses,
+      totalPurchases,
+      closingBalance,
+      tomorrowDate: shiftDateISO(date, 1),
+      tomorrowOpening: closingBalance,
+      note: "Daily cash drawer book for this date. Opening here is NOT restaurant capital. Purchases are listed for reference and do not reduce closing cash.",
+    });
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "cash-day failed" });
+  }
+});
+
+router.put("/finance/cash-day", async (req, res): Promise<void> => {
+  const parsed = z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    openingBalance: z.number(),
+    notes: z.string().optional(),
+  }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  try {
+    const result = await saveCashDayWithCarry(parsed.data.date, parsed.data.openingBalance, parsed.data.notes);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "cash-day save failed" });
+  }
 });
 
 router.post("/finance/income/bulk-save", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, unknown>;
+  if (body.actor != null || body.actorId != null) {
+    res.status(400).json({
+      error: "Do not send actor identity; the server uses the authenticated session.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
   const parsed = z.object({
     rows: z.array(z.object({
       id: z.number().optional(),
@@ -844,7 +1271,7 @@ router.post("/finance/income/bulk-save", async (req, res): Promise<void> => {
       incomeTime: z.string().optional(),
       source: z.string().min(1),
       amount: z.number().positive(),
-      recordedBy: z.string().min(1),
+      recordedBy: z.string().optional(),
       notes: z.string().optional(),
     })),
     deleteIds: z.array(z.number()).optional(),
@@ -853,9 +1280,16 @@ router.post("/finance/income/bulk-save", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const { actorFrom } = await import("../auth/middleware");
+  const sessionActor = actorFrom(req);
   const saved = await db.transaction(async (tx) => {
     if (parsed.data.deleteIds?.length) {
-      await tx.delete(incomeTable).where(inArray(incomeTable.id, parsed.data.deleteIds));
+      await tx.update(incomeTable).set({
+        status: "voided",
+        voidedAt: new Date(),
+        voidedBy: sessionActor,
+        voidReason: "voided via bulk-save",
+      }).where(inArray(incomeTable.id, parsed.data.deleteIds));
     }
     const results = [];
     for (const row of parsed.data.rows) {
@@ -864,11 +1298,17 @@ router.post("/finance/income/bulk-save", async (req, res): Promise<void> => {
         incomeTime: row.incomeTime ?? "",
         source: row.source,
         amount: row.amount,
-        recordedBy: row.recordedBy,
+        recordedBy: sessionActor,
         notes: row.notes ?? "",
+        status: "active" as const,
       };
       if (row.id) {
-        const [updated] = await tx.update(incomeTable).set(payload).where(eq(incomeTable.id, row.id)).returning();
+        const existing = await tx.select().from(incomeTable).where(eq(incomeTable.id, row.id)).limit(1);
+        const keepActor = existing[0]?.recordedBy || sessionActor;
+        const [updated] = await tx.update(incomeTable).set({
+          ...payload,
+          recordedBy: keepActor,
+        }).where(eq(incomeTable.id, row.id)).returning();
         if (updated) results.push(updated);
       } else {
         const [created] = await tx.insert(incomeTable).values(payload).returning();
@@ -878,6 +1318,408 @@ router.post("/finance/income/bulk-save", async (req, res): Promise<void> => {
     return results;
   });
   res.json(saved.map((row) => ({ ...row, createdAt: iso(row.createdAt) })));
+});
+
+const capitalCreateSchema = z.object({
+  entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  entryType: z.enum(["initial_capital", "additional_capital"]),
+  amount: z.number().positive(),
+  description: z.string().optional(),
+  clientRequestId: z.string().min(1).max(120).optional(),
+});
+
+router.get("/finance/capital", async (req, res): Promise<void> => {
+  try {
+    const includeVoided = req.query.includeVoided === "1" || req.query.includeVoided === "true";
+    const { listCapitalEntries } = await import("../services/capitalService");
+    const rows = await listCapitalEntries({ includeVoided, limit: 500 });
+    res.json(rows);
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.post("/finance/capital", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, unknown>;
+  if (body.actor != null || body.actorId != null || body.responsible != null) {
+    res.status(400).json({
+      error: "Do not send actor identity; the server uses the authenticated session.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+  const parsed = capitalCreateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message, code: "VALIDATION_ERROR" });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { createCapitalEntry } = await import("../services/capitalService");
+    const result = await createCapitalEntry({
+      ...parsed.data,
+      actor: actorFrom(req),
+      userId: req.user?.id ?? null,
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.post("/finance/capital/:id/void", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid capital entry id", code: "VALIDATION_ERROR" });
+    return;
+  }
+  const body = req.body as Record<string, unknown>;
+  if (body.actor != null || body.actorId != null) {
+    res.status(400).json({
+      error: "Do not send actor identity; the server uses the authenticated session.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+  const reason = typeof body.reason === "string" ? body.reason : undefined;
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { voidCapitalEntry } = await import("../services/capitalService");
+    const result = await voidCapitalEntry({
+      id,
+      actor: actorFrom(req),
+      reason,
+    });
+    res.json(result);
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.get("/finance/operational-summary", async (_req, res): Promise<void> => {
+  try {
+    const { getAvailableCapitalSummary } = await import("../services/capitalService");
+    const summary = await getAvailableCapitalSummary();
+    res.json(summary);
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.get("/finance/available-summary", async (_req, res): Promise<void> => {
+  try {
+    const { getAvailableCapitalSummary } = await import("../services/capitalService");
+    const summary = await getAvailableCapitalSummary();
+    res.json(summary);
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+/**
+ * Soft-void historical expenses that look like purchases (audit kept).
+ * Does NOT create purchase_payments and does NOT delete rows.
+ */
+router.post("/finance/expenses/remediate-purchase-duplicates", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, unknown>;
+  if (body.actor != null || body.actorId != null) {
+    res.status(400).json({
+      error: "Do not send actor identity; the server uses the authenticated session.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { softVoidSuspectedPurchaseExpenses, getAvailableCapitalSummary } = await import("../services/capitalService");
+    const result = await softVoidSuspectedPurchaseExpenses(
+      actorFrom(req),
+      typeof body.reason === "string" ? body.reason : undefined,
+    );
+    const summary = await getAvailableCapitalSummary();
+    res.json({ ...result, summary });
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.post("/finance/expenses/:id/void", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const body = req.body as Record<string, unknown>;
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid expense id" });
+    return;
+  }
+  if (body.actor != null || body.actorId != null) {
+    res.status(400).json({
+      error: "Do not send actor identity; the server uses the authenticated session.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { voidExpense } = await import("../services/capitalService");
+    const result = await voidExpense(id, actorFrom(req), typeof body.reason === "string" ? body.reason : undefined);
+    res.json(result);
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.post("/finance/income/:id/void", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const body = req.body as Record<string, unknown>;
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid income id" });
+    return;
+  }
+  if (body.actor != null || body.actorId != null) {
+    res.status(400).json({
+      error: "Do not send actor identity; the server uses the authenticated session.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { voidIncome } = await import("../services/capitalService");
+    const result = await voidIncome(id, actorFrom(req), typeof body.reason === "string" ? body.reason : undefined);
+    res.json(result);
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.get("/finance/purchase-payments", async (req, res): Promise<void> => {
+  try {
+    const includeVoided = req.query.includeVoided === "1" || req.query.includeVoided === "true";
+    const { listPurchasePayments } = await import("../services/purchasePaymentService");
+    res.json(await listPurchasePayments({ includeVoided, limit: 500 }));
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.post("/finance/purchase-payments", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, unknown>;
+  if (body.actor != null || body.actorId != null) {
+    res.status(400).json({ error: "Do not send actor identity; the server uses the authenticated session.", code: "VALIDATION_ERROR" });
+    return;
+  }
+  const parsed = z.object({
+    purchaseId: z.number().int().positive(),
+    amount: z.number().positive(),
+    paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    paymentMethod: z.string().optional(),
+    notes: z.string().optional(),
+    clientRequestId: z.string().min(1).max(120).optional(),
+  }).safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message, code: "VALIDATION_ERROR" });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { postPurchasePayment } = await import("../services/purchasePaymentService");
+    const result = await postPurchasePayment({
+      ...parsed.data,
+      actor: actorFrom(req),
+      userId: req.user?.id ?? null,
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.post("/finance/purchase-payments/:id/void", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid payment id", code: "VALIDATION_ERROR" });
+    return;
+  }
+  const body = req.body as Record<string, unknown>;
+  if (body.actor != null || body.actorId != null) {
+    res.status(400).json({ error: "Do not send actor identity; the server uses the authenticated session.", code: "VALIDATION_ERROR" });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { voidPurchasePayment } = await import("../services/purchasePaymentService");
+    const result = await voidPurchasePayment({
+      id,
+      actor: actorFrom(req),
+      reason: typeof body.reason === "string" ? body.reason : undefined,
+    });
+    res.json(result);
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.post("/purchases/receive-goods", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, unknown>;
+  if (body.actor != null || body.actorId != null || body.currentStock != null) {
+    res.status(400).json({
+      error: "Do not send actor identity or stock balances; the server uses the authenticated session.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+  const parsed = z.object({
+    inventoryItemId: z.number().int().positive().optional().nullable(),
+    newItem: z.object({
+      name: z.string().min(1),
+      category: z.string().optional(),
+      unit: z.string().min(1),
+      minimumStock: z.number().optional(),
+      costPerUnit: z.number().optional(),
+      brand: z.string().optional(),
+    }).optional(),
+    quantity: z.number().positive(),
+    unit: z.string().optional(),
+    unitPrice: z.number().min(0),
+    supplier: z.string().min(1),
+    paymentMethod: z.string().optional(),
+    paymentStatus: z.enum(["paid", "unpaid"]).optional(),
+    purchaseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    purchaseTime: z.string().optional(),
+    receivedBy: z.string().optional(),
+    notes: z.string().optional(),
+    brand: z.string().optional(),
+    invoiceNumber: z.string().optional(),
+    clientRequestId: z.string().min(1).max(120).optional(),
+    purchaseId: z.number().int().positive().optional().nullable(),
+  }).safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message, code: "VALIDATION_ERROR" });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { receiveGoods } = await import("../services/receiveGoodsService");
+    const result = await receiveGoods({
+      ...parsed.data,
+      actor: actorFrom(req),
+      userId: req.user?.id ?? null,
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+/**
+ * Unified today's purchase entry:
+ * destination=warehouse → receive goods (stock + payment)
+ * destination=none → purchase + payment only (no inventory)
+ */
+router.post("/purchases/record", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, unknown>;
+  if (body.actor != null || body.actorId != null || body.currentStock != null) {
+    res.status(400).json({
+      error: "Do not send actor identity or stock balances; the server uses the authenticated session.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+  const parsed = z.object({
+    destination: z.enum(["warehouse", "none"]),
+    itemName: z.string().min(1),
+    category: z.string().optional(),
+    quantity: z.number().positive(),
+    unit: z.string().min(1),
+    unitPrice: z.number().min(0),
+    supplier: z.string().min(1),
+    paymentMethod: z.string().optional(),
+    paymentStatus: z.enum(["paid", "unpaid"]).optional(),
+    purchaseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    purchaseTime: z.string().optional(),
+    notes: z.string().optional(),
+    inventoryItemId: z.number().int().positive().optional().nullable(),
+    clientRequestId: z.string().min(1).max(120).optional(),
+  }).safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message, code: "VALIDATION_ERROR" });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { recordDailyPurchase } = await import("../services/recordDailyPurchaseService");
+    const result = await recordDailyPurchase({
+      ...parsed.data,
+      actor: actorFrom(req),
+      userId: req.user?.id ?? null,
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.post("/purchases/:id/cancel", async (req, res): Promise<void> => {
+  const purchaseId = Number(req.params.id);
+  const body = req.body as Record<string, unknown>;
+  if (!Number.isFinite(purchaseId) || purchaseId <= 0) {
+    res.status(400).json({ error: "Invalid purchase id" });
+    return;
+  }
+  if (body.actor != null || body.actorId != null) {
+    res.status(400).json({
+      error: "Do not send actor identity; the server uses the authenticated session.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { cancelDailyPurchase } = await import("../services/recordDailyPurchaseService");
+    const result = await cancelDailyPurchase({
+      purchaseId,
+      actor: actorFrom(req),
+      reason: typeof body.reason === "string" ? body.reason : undefined,
+    });
+    res.json(result);
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.get("/inventory/warehouse-summary", async (req, res): Promise<void> => {
+  try {
+    const from = typeof req.query.from === "string" ? req.query.from : undefined;
+    const to = typeof req.query.to === "string" ? req.query.to : undefined;
+    const { getWarehouseSummary } = await import("../services/warehouseSummaryService");
+    res.json(await getWarehouseSummary({ from, to }));
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.get("/inventory/stock-integrity", async (_req, res): Promise<void> => {
+  try {
+    const { getStockIntegrityReport } = await import("../services/warehouseSummaryService");
+    res.json(await getStockIntegrityReport());
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
 });
 
 router.post("/staff/employees/bulk-save", async (req, res): Promise<void> => {
@@ -977,7 +1819,7 @@ const purchaseRowSchema = z.object({
   id: z.number().optional(),
   purchaseDate: z.string(),
   purchaseTime: z.string().optional(),
-  supplier: z.string().min(1),
+  supplier: z.string().min(1).optional().default("-"),
   itemName: z.string().min(1),
   category: z.string().optional().default(""),
   quantity: z.number().positive(),
@@ -994,11 +1836,12 @@ const purchaseRowSchema = z.object({
   syncExpense: z.boolean().optional(),
 }).transform((row) => ({
   ...row,
-  category: row.category.trim() || "General",
-  unit: row.unit.trim() || "kg",
-  paidBy: row.paidBy.trim() || "Staff",
-  receivedBy: row.receivedBy.trim() || "Gudang",
-  paymentMethod: row.paymentMethod.trim() || "Cash",
+  supplier: (row.supplier ?? "-").trim() || "-",
+  category: (row.category ?? "").trim() || "General",
+  unit: (row.unit ?? "kg").trim() || "kg",
+  paidBy: (row.paidBy ?? "").trim() || "Staff",
+  receivedBy: (row.receivedBy ?? "").trim() || "Gudang",
+  paymentMethod: (row.paymentMethod ?? "Cash").trim() || "Cash",
 }));
 
 function resolveDestination(row: z.infer<typeof purchaseRowSchema>): "warehouse" | "kitchen" | "none" {
@@ -1013,7 +1856,27 @@ router.get("/purchases", async (req, res): Promise<void> => {
     .where(date ? eq(dailyPurchasesTable.purchaseDate, date) : undefined)
     .orderBy(desc(dailyPurchasesTable.purchaseDate), desc(dailyPurchasesTable.createdAt))
     .limit(500);
-  res.json(rows.map((row) => ({ ...row, createdAt: iso(row.createdAt) })));
+
+  const ids = rows.map((r) => r.id);
+  const payments = ids.length
+    ? await db.select().from(purchasePaymentsTable)
+      .where(and(
+        inArray(purchasePaymentsTable.purchaseId, ids),
+        eq(purchasePaymentsTable.status, "active"),
+      ))
+    : [];
+  const payByPurchase = new Map(payments.map((p) => [p.purchaseId, p]));
+
+  res.json(rows.map((row) => {
+    const pay = payByPurchase.get(row.id);
+    return {
+      ...row,
+      createdAt: iso(row.createdAt),
+      paymentStatus: pay ? "paid" : "unpaid",
+      activePaymentId: pay?.id ?? null,
+      activePaymentAmount: pay ? Number(pay.amount) : null,
+    };
+  }));
 });
 
 router.post("/purchases/bulk-save", async (req, res): Promise<void> => {
@@ -1023,104 +1886,92 @@ router.post("/purchases/bulk-save", async (req, res): Promise<void> => {
     return;
   }
   try {
-    const saved = await db.transaction(async (tx) => {
-      if (parsed.data.deleteIds?.length) {
-        const oldRows = await tx.select().from(dailyPurchasesTable).where(inArray(dailyPurchasesTable.id, parsed.data.deleteIds));
-        for (const old of oldRows) {
-          const dest = (old.destination as "warehouse" | "kitchen" | "none") || (old.addToStock === "no" ? "none" : "warehouse");
-          if ((dest === "warehouse" || dest === "kitchen") && old.inventoryItemId) {
-            await applyLocationDelta(tx as typeof db, old.inventoryItemId, dest, -Number(old.quantity));
-          }
-        }
-        await tx.delete(inventoryMovementsTable).where(inArray(inventoryMovementsTable.purchaseId, parsed.data.deleteIds));
-        await tx.delete(dailyPurchasesTable).where(inArray(dailyPurchasesTable.id, parsed.data.deleteIds));
-      }
-
-      const results = [];
-      for (const row of parsed.data.rows) {
+    const saved = await upsertPurchases(
+      parsed.data.rows.map((row) => {
         const destination = resolveDestination(row);
-        if ((destination === "warehouse" || destination === "kitchen") && !row.inventoryItemId) {
-          throw new Error(`Purchase "${row.itemName}" needs an inventory item for destination ${destination}`);
-        }
-        const totalAmount = row.totalAmount ?? row.quantity * row.unitPrice;
-        const payload = {
+        return {
+          id: row.id,
           purchaseDate: row.purchaseDate,
-          purchaseTime: row.purchaseTime ?? "",
+          purchaseTime: row.purchaseTime,
           supplier: row.supplier,
           itemName: row.itemName,
           category: row.category,
           quantity: row.quantity,
           unit: row.unit,
           unitPrice: row.unitPrice,
-          totalAmount,
+          totalAmount: row.totalAmount,
           paidBy: row.paidBy,
           receivedBy: row.receivedBy,
           paymentMethod: row.paymentMethod,
           inventoryItemId: destination === "none" ? null : (row.inventoryItemId ?? null),
           destination,
-          addToStock: destination === "none" ? "no" : "yes",
-          notes: row.notes ?? "",
+          notes: row.notes,
         };
-
-        if (row.id) {
-          const existing = await tx.query.dailyPurchasesTable.findFirst({ where: eq(dailyPurchasesTable.id, row.id) });
-          if (existing) {
-            const oldDest = (existing.destination as Location | "none") || "warehouse";
-            if ((oldDest === "warehouse" || oldDest === "kitchen") && existing.inventoryItemId) {
-              await applyLocationDelta(tx as typeof db, existing.inventoryItemId, oldDest, -Number(existing.quantity));
-            }
-            await tx.delete(inventoryMovementsTable).where(eq(inventoryMovementsTable.purchaseId, row.id));
-          }
-          const [purchase] = await tx.update(dailyPurchasesTable).set(payload).where(eq(dailyPurchasesTable.id, row.id)).returning();
-          if ((destination === "warehouse" || destination === "kitchen") && row.inventoryItemId) {
-            await applyLocationDelta(tx as typeof db, row.inventoryItemId, destination, row.quantity, { costPerUnit: row.unitPrice });
-            await tx.insert(inventoryMovementsTable).values({
-              itemId: row.inventoryItemId,
-              type: "in",
-              location: destination,
-              quantity: row.quantity,
-              note: `Purchase #${purchase.id}: ${row.supplier}`,
-              actor: row.receivedBy,
-              purchaseId: purchase.id,
-            });
-          }
-          if (purchase) results.push(purchase);
-        } else {
-          const [purchase] = await tx.insert(dailyPurchasesTable).values(payload).returning();
-          if (row.syncExpense !== false) {
-            await tx.insert(expensesTable).values({
-              expenseDate: row.purchaseDate,
-              expenseTime: row.purchaseTime ?? "",
-              category: "Pembelian / مشتريات",
-              description: `${row.itemName} · ${row.supplier}`,
-              amount: totalAmount,
-              paidBy: row.paidBy,
-              receivedBy: row.receivedBy,
-              paymentMethod: row.paymentMethod,
-              notes: `destination:${destination}`,
-            });
-          }
-          if ((destination === "warehouse" || destination === "kitchen") && row.inventoryItemId) {
-            await applyLocationDelta(tx as typeof db, row.inventoryItemId, destination, row.quantity, { costPerUnit: row.unitPrice });
-            await tx.insert(inventoryMovementsTable).values({
-              itemId: row.inventoryItemId,
-              type: "in",
-              location: destination,
-              quantity: row.quantity,
-              note: `Purchase #${purchase.id}: ${row.supplier}`,
-              actor: row.receivedBy,
-              purchaseId: purchase.id,
-            });
-          }
-          if (purchase) results.push(purchase);
-        }
-      }
-      return results;
-    });
+      }),
+      parsed.data.deleteIds ?? [],
+    );
     res.json(saved.map((row) => ({ ...row, createdAt: iso(row.createdAt) })));
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Bulk save failed" });
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
   }
+});
+
+/** Receive against a purchase — creates warehouse stock + lot. Purchase alone does not. */
+router.post("/purchases/:id/receive", async (req, res): Promise<void> => {
+  const purchaseId = Number(req.params.id);
+  const schema = z.object({
+    quantity: z.number().positive(),
+    unit: z.string().optional(),
+    note: z.string().optional(),
+  });
+  const parsed = schema.safeParse(req.body ?? {});
+  if (!Number.isFinite(purchaseId) || !parsed.success) {
+    res.status(400).json({ error: parsed.success === false ? parsed.error.message : "Invalid purchase id" });
+    return;
+  }
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const result = await receivePurchase(purchaseId, {
+      quantity: parsed.data.quantity,
+      unit: parsed.data.unit,
+      note: parsed.data.note,
+      actor: actorFrom(req),
+      userId: req.user?.id ?? null,
+    });
+    res.status(201).json({
+      success: true,
+      purchaseId,
+      quantity: result.quantity,
+      unit: result.unit,
+      lotId: result.lot.id,
+      movementId: result.movement.id,
+      warehouseStock: result.warehouseStock,
+      kitchenStock: result.kitchenStock,
+      item: serializeInv(result.item),
+    });
+  } catch (error) {
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
+  }
+});
+
+router.get("/finance/purchases/today", async (req, res): Promise<void> => {
+  const date = typeof req.query.date === "string"
+    ? req.query.date
+    : (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    })();
+  const summary = await getTodayPurchasesSummary(date);
+  res.json({
+    ...summary,
+    rows: summary.rows.map((r) => ({ ...r, createdAt: iso(r.createdAt) })),
+  });
+});
+
+router.get("/finance/inventory-value", async (_req, res): Promise<void> => {
+  res.json(await getInventoryValue());
 });
 
 // ——— Waste ———
@@ -1152,6 +2003,7 @@ router.post("/waste/bulk-save", async (req, res): Promise<void> => {
       inventoryItemId: z.number(),
       location: z.enum(["warehouse", "kitchen"]),
       quantity: z.number().positive(),
+      unit: z.string().optional(),
       reason: z.enum(["spoilage", "prep", "theft", "other"]).default("spoilage"),
       actor: z.string().min(1),
       notes: z.string().optional(),
@@ -1163,54 +2015,136 @@ router.post("/waste/bulk-save", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  if (parsed.data.deleteIds?.length) {
+    res.status(400).json({
+      error: "Waste records are immutable. Corrections require POST /inventory/movements/:id/reverse (append-only audit).",
+      code: "WASTE_IMMUTABLE",
+    });
+    return;
+  }
   try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { wasteStock } = await import("../services/inventoryService");
     const saved = await db.transaction(async (tx) => {
-      if (parsed.data.deleteIds?.length) {
-        const old = await tx.select().from(wasteRecordsTable).where(inArray(wasteRecordsTable.id, parsed.data.deleteIds));
-        for (const row of old) {
-          await applyLocationDelta(tx as typeof db, row.inventoryItemId, row.location as Location, Number(row.quantity));
-        }
-        await tx.delete(wasteRecordsTable).where(inArray(wasteRecordsTable.id, parsed.data.deleteIds));
-      }
       const results = [];
       for (const row of parsed.data.rows) {
         if (row.id) continue;
-        const item = await applyLocationDelta(tx as typeof db, row.inventoryItemId, row.location, -row.quantity);
-        const costEstimate = row.quantity * Number(item.costPerUnit || 0);
+        const actor = actorFrom(req, row.actor);
+        const { movement, item, quantity } = await wasteStock(tx, {
+          itemId: row.inventoryItemId,
+          location: row.location,
+          quantity: row.quantity,
+          unit: row.unit,
+          note: row.notes,
+          actor,
+          userId: req.user?.id ?? null,
+          reason: row.reason,
+        });
+        const costEstimate = quantity * Number(item.costPerUnit || 0);
         const [created] = await tx.insert(wasteRecordsTable).values({
           wasteDate: row.wasteDate,
           wasteTime: row.wasteTime ?? "",
           inventoryItemId: row.inventoryItemId,
           location: row.location,
-          quantity: row.quantity,
+          quantity,
           reason: row.reason,
-          actor: row.actor,
+          actor,
           costEstimate,
           notes: row.notes ?? "",
         }).returning();
-        await tx.insert(inventoryMovementsTable).values({
-          itemId: row.inventoryItemId,
-          type: "out",
-          location: row.location,
-          quantity: row.quantity,
-          note: `Waste: ${row.reason}`,
-          actor: row.actor,
-        });
+        void movement;
         results.push({ ...created, itemName: item.name, unit: item.unit });
       }
       return results;
     });
     res.json(saved.map((row) => ({ ...row, createdAt: iso(row.createdAt) })));
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Waste save failed" });
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
   }
 });
 
 // ——— Recipes / plate costing ———
-function lineCost(qty: number, unit: string, itemUnit: string, costPerUnit: number, yieldPct: number) {
-  const inItemUnit = convertToItemUnit(qty, unit, itemUnit);
-  const yieldFactor = Math.max(1, yieldPct || 100) / 100;
-  return (inItemUnit * costPerUnit) / yieldFactor;
+function serializeRecipeComputed(
+  recipe: typeof menuRecipesTable.$inferSelect,
+  linesRaw: (typeof recipeLinesTable.$inferSelect)[],
+  itemMap: Map<number, typeof inventoryItemsTable.$inferSelect>,
+) {
+  const lines = linesRaw.map((line) => {
+    const item = itemMap.get(line.inventoryItemId);
+    if (!item) {
+      return {
+        id: line.id,
+        inventoryItemId: line.inventoryItemId,
+        quantity: Number(line.quantity),
+        unit: line.unit,
+        yieldPct: Number(line.yieldPct || 100),
+        notes: line.notes,
+        itemName: "",
+        itemUnit: "",
+        convertedQuantity: 0,
+        convertedUnit: "",
+        costPerUnit: 0,
+        lineCost: 0,
+        error: "Inventory item not found",
+      };
+    }
+    try {
+      const breakdown = computeRecipeLineCost({
+        quantity: Number(line.quantity),
+        unit: line.unit,
+        itemUnit: item.unit,
+        costPerUnit: Number(item.costPerUnit || 0),
+        yieldPct: Number(line.yieldPct || 100),
+      });
+      return {
+        id: line.id,
+        inventoryItemId: line.inventoryItemId,
+        quantity: breakdown.quantity,
+        unit: breakdown.unit,
+        yieldPct: breakdown.yieldPct,
+        notes: line.notes,
+        itemName: item.name,
+        itemUnit: item.unit,
+        convertedQuantity: breakdown.convertedQuantity,
+        convertedUnit: breakdown.convertedUnit,
+        costPerUnit: breakdown.costPerUnit,
+        lineCost: breakdown.lineCost,
+      };
+    } catch (e) {
+      return {
+        id: line.id,
+        inventoryItemId: line.inventoryItemId,
+        quantity: Number(line.quantity),
+        unit: line.unit,
+        yieldPct: Number(line.yieldPct || 100),
+        notes: line.notes,
+        itemName: item.name,
+        itemUnit: item.unit,
+        convertedQuantity: 0,
+        convertedUnit: item.unit,
+        costPerUnit: Number(item.costPerUnit || 0),
+        lineCost: 0,
+        error: e instanceof Error ? e.message : "Invalid line",
+      };
+    }
+  });
+  const totals = computeRecipeTotals(
+    lines.map((l) => l.lineCost),
+    Number(recipe.portions) || 1,
+    Number(recipe.sellingPrice) || 0,
+    Number(recipe.targetFoodCostPct) || 30,
+  );
+  return {
+    ...recipe,
+    createdAt: iso(recipe.createdAt),
+    updatedAt: iso(recipe.updatedAt),
+    lines,
+    totalCost: totals.totalCost,
+    costPerPortion: totals.costPerPortion,
+    suggestedPrice: totals.suggestedPrice,
+    foodCostPct: totals.foodCostPct,
+  };
 }
 
 router.get("/recipes", async (_req, res): Promise<void> => {
@@ -1218,39 +2152,11 @@ router.get("/recipes", async (_req, res): Promise<void> => {
   const allLines = await db.select().from(recipeLinesTable);
   const items = await db.select().from(inventoryItemsTable);
   const itemMap = new Map(items.map((i) => [i.id, i]));
-
-  res.json(recipes.map((recipe) => {
-    const lines = allLines.filter((l) => l.recipeId === recipe.id).map((line) => {
-      const item = itemMap.get(line.inventoryItemId);
-      const cost = item
-        ? lineCost(Number(line.quantity), line.unit, item.unit, Number(item.costPerUnit || 0), Number(line.yieldPct || 100))
-        : 0;
-      return {
-        ...line,
-        itemName: item?.name ?? "",
-        itemUnit: item?.unit ?? "",
-        costPerUnit: item?.costPerUnit ?? 0,
-        lineCost: cost,
-      };
-    });
-    const totalCost = lines.reduce((s, l) => s + l.lineCost, 0);
-    const portions = Math.max(0.01, Number(recipe.portions) || 1);
-    const costPerPortion = totalCost / portions;
-    const targetPct = Math.max(1, Number(recipe.targetFoodCostPct) || 30);
-    const suggestedPrice = costPerPortion / (targetPct / 100);
-    const selling = Number(recipe.sellingPrice) || 0;
-    const foodCostPct = selling > 0 ? (costPerPortion / selling) * 100 : 0;
-    return {
-      ...recipe,
-      createdAt: iso(recipe.createdAt),
-      updatedAt: iso(recipe.updatedAt),
-      lines,
-      totalCost,
-      costPerPortion,
-      suggestedPrice,
-      foodCostPct,
-    };
-  }));
+  res.json(recipes.map((recipe) => serializeRecipeComputed(
+    recipe,
+    allLines.filter((l) => l.recipeId === recipe.id),
+    itemMap,
+  )));
 });
 
 router.post("/recipes/bulk-save", async (req, res): Promise<void> => {
@@ -1259,7 +2165,7 @@ router.post("/recipes/bulk-save", async (req, res): Promise<void> => {
     inventoryItemId: z.number(),
     quantity: z.number().positive(),
     unit: z.string().min(1),
-    yieldPct: z.number().min(1).max(100).optional(),
+    yieldPct: z.number().gt(0).max(100).optional(),
     notes: z.string().optional(),
   });
   const parsed = z.object({
@@ -1279,78 +2185,78 @@ router.post("/recipes/bulk-save", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const savedIds = await db.transaction(async (tx) => {
-    if (parsed.data.deleteIds?.length) {
-      await tx.delete(recipeLinesTable).where(inArray(recipeLinesTable.recipeId, parsed.data.deleteIds));
-      await tx.delete(menuRecipesTable).where(inArray(menuRecipesTable.id, parsed.data.deleteIds));
-    }
-    const ids: number[] = [];
-    for (const row of parsed.data.rows) {
-      const payload = {
-        name: row.name,
-        category: row.category ?? "",
-        portions: row.portions ?? 1,
-        targetFoodCostPct: row.targetFoodCostPct ?? 30,
-        sellingPrice: row.sellingPrice ?? 0,
-        notes: row.notes ?? "",
-        updatedAt: new Date(),
-      };
-      let recipeId = row.id;
-      if (recipeId) {
-        await tx.update(menuRecipesTable).set(payload).where(eq(menuRecipesTable.id, recipeId));
-        if (row.lines) {
-          await tx.delete(recipeLinesTable).where(eq(recipeLinesTable.recipeId, recipeId));
-        }
-      } else {
-        const [created] = await tx.insert(menuRecipesTable).values(payload).returning();
-        recipeId = created.id;
-      }
-      if (row.lines?.length) {
-        await tx.insert(recipeLinesTable).values(row.lines.map((line) => ({
-          recipeId: recipeId!,
-          inventoryItemId: line.inventoryItemId,
-          quantity: line.quantity,
-          unit: line.unit,
-          yieldPct: line.yieldPct ?? 100,
-          notes: line.notes ?? "",
-        })));
-      }
-      ids.push(recipeId!);
-    }
-    return ids;
-  });
 
-  const all = savedIds.length
-    ? await db.select().from(menuRecipesTable).where(inArray(menuRecipesTable.id, savedIds))
-    : [];
-  const allLines = savedIds.length
-    ? await db.select().from(recipeLinesTable).where(inArray(recipeLinesTable.recipeId, savedIds))
-    : [];
-  const items = await db.select().from(inventoryItemsTable);
-  const itemMap = new Map(items.map((i) => [i.id, i]));
-  res.json(all.map((recipe) => {
-    const lines = allLines.filter((l) => l.recipeId === recipe.id).map((line) => {
-      const item = itemMap.get(line.inventoryItemId);
-      const cost = item
-        ? lineCost(Number(line.quantity), line.unit, item.unit, Number(item.costPerUnit || 0), Number(line.yieldPct || 100))
-        : 0;
-      return { ...line, itemName: item?.name ?? "", itemUnit: item?.unit ?? "", costPerUnit: item?.costPerUnit ?? 0, lineCost: cost };
+  try {
+    // Pre-validate units against inventory before writing (no stock mutation)
+    const items = await db.select().from(inventoryItemsTable);
+    const itemMap = new Map(items.map((i) => [i.id, i]));
+    for (const row of parsed.data.rows) {
+      for (const line of row.lines ?? []) {
+        const item = itemMap.get(line.inventoryItemId);
+        if (!item) {
+          throw new Error(`Inventory item ${line.inventoryItemId} not found`);
+        }
+        assertRecipeLineCompatible(line.quantity, line.unit, item.unit, line.yieldPct ?? 100);
+      }
+    }
+
+    const savedIds = await db.transaction(async (tx) => {
+      if (parsed.data.deleteIds?.length) {
+        await tx.delete(recipeLinesTable).where(inArray(recipeLinesTable.recipeId, parsed.data.deleteIds));
+        await tx.delete(menuRecipesTable).where(inArray(menuRecipesTable.id, parsed.data.deleteIds));
+      }
+      const ids: number[] = [];
+      for (const row of parsed.data.rows) {
+        const payload = {
+          name: row.name,
+          category: row.category ?? "",
+          portions: row.portions ?? 1,
+          targetFoodCostPct: row.targetFoodCostPct ?? 30,
+          sellingPrice: row.sellingPrice ?? 0,
+          notes: row.notes ?? "",
+          updatedAt: new Date(),
+        };
+        let recipeId = row.id;
+        if (recipeId) {
+          await tx.update(menuRecipesTable).set(payload).where(eq(menuRecipesTable.id, recipeId));
+          if (row.lines) {
+            await tx.delete(recipeLinesTable).where(eq(recipeLinesTable.recipeId, recipeId));
+          }
+        } else {
+          const [created] = await tx.insert(menuRecipesTable).values(payload).returning();
+          recipeId = created.id;
+        }
+        if (row.lines?.length) {
+          await tx.insert(recipeLinesTable).values(row.lines.map((line) => ({
+            recipeId: recipeId!,
+            inventoryItemId: line.inventoryItemId,
+            quantity: line.quantity,
+            unit: line.unit,
+            yieldPct: line.yieldPct ?? 100,
+            notes: line.notes ?? "",
+          })));
+        }
+        ids.push(recipeId!);
+      }
+      return ids;
     });
-    const totalCost = lines.reduce((s, l) => s + l.lineCost, 0);
-    const portions = Math.max(0.01, Number(recipe.portions) || 1);
-    const costPerPortion = totalCost / portions;
-    const targetPct = Math.max(1, Number(recipe.targetFoodCostPct) || 30);
-    return {
-      ...recipe,
-      createdAt: iso(recipe.createdAt),
-      updatedAt: iso(recipe.updatedAt),
-      lines,
-      totalCost,
-      costPerPortion,
-      suggestedPrice: costPerPortion / (targetPct / 100),
-      foodCostPct: Number(recipe.sellingPrice) > 0 ? (costPerPortion / Number(recipe.sellingPrice)) * 100 : 0,
-    };
-  }));
+
+    const all = savedIds.length
+      ? await db.select().from(menuRecipesTable).where(inArray(menuRecipesTable.id, savedIds))
+      : [];
+    const allLines = savedIds.length
+      ? await db.select().from(recipeLinesTable).where(inArray(recipeLinesTable.recipeId, savedIds))
+      : [];
+    const itemsAfter = await db.select().from(inventoryItemsTable);
+    const mapAfter = new Map(itemsAfter.map((i) => [i.id, i]));
+    res.json(all.map((recipe) => serializeRecipeComputed(
+      recipe,
+      allLines.filter((l) => l.recipeId === recipe.id),
+      mapAfter,
+    )));
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Recipe save failed" });
+  }
 });
 
 const closeDayBody = z.object({
@@ -1390,7 +2296,7 @@ function serializeArchive(row: typeof dailyArchivesTable.$inferSelect, includeSn
 }
 
 async function buildDaySnapshot(date: string) {
-  const [incomeRows, expenseRows, purchaseRows, wasteRows, movements, attendanceRows, stockItems] = await Promise.all([
+  const [incomeRows, expenseRows, purchaseRows, wasteRows, movements, attendanceRows, stockItems, cashDay] = await Promise.all([
     db.select().from(incomeTable).where(eq(incomeTable.incomeDate, date)).orderBy(desc(incomeTable.createdAt)),
     db.select().from(expensesTable).where(eq(expensesTable.expenseDate, date)).orderBy(desc(expensesTable.createdAt)),
     db.select().from(dailyPurchasesTable).where(eq(dailyPurchasesTable.purchaseDate, date)).orderBy(desc(dailyPurchasesTable.createdAt)),
@@ -1410,18 +2316,32 @@ async function buildDaySnapshot(date: string) {
       .leftJoin(employeesTable, eq(attendanceTable.employeeId, employeesTable.id))
       .where(eq(attendanceTable.attendanceDate, date)),
     db.select().from(inventoryItemsTable).orderBy(asc(inventoryItemsTable.category), asc(inventoryItemsTable.name)),
+    resolveOpeningBalance(date),
   ]);
 
   const totalIncome = incomeRows.reduce((s, r) => s + Number(r.amount), 0);
   const totalExpenses = expenseRows.reduce((s, r) => s + Number(r.amount), 0);
   const totalPurchases = purchaseRows.reduce((s, r) => s + Number(r.totalAmount), 0);
   const wasteCost = wasteRows.reduce((s, r) => s + Number(r.costEstimate), 0);
-  const kitchenMovements = movements.filter((m) => m.movement.type === "kitchen").length;
+  const kitchenMovements = movements.filter((m) =>
+    m.movement.type === "kitchen"
+    || (m.movement.type === "transfer" && m.movement.location === "kitchen"),
+  ).length;
   const warehouseValue = stockItems.reduce((s, i) => s + Number(i.currentStock) * Number(i.costPerUnit), 0);
   const kitchenValue = stockItems.reduce((s, i) => s + Number(i.kitchenStock) * Number(i.costPerUnit), 0);
+  const closingBalance = Math.round((cashDay.openingBalance + totalIncome - totalExpenses) * 100) / 100;
 
   const snapshot = {
     date,
+    cash: {
+      openingBalance: cashDay.openingBalance,
+      suggestedOpening: cashDay.suggestedOpening,
+      closingBalance,
+      totalIncome,
+      totalExpenses,
+      totalPurchases,
+      tomorrowOpening: closingBalance,
+    },
     income: incomeRows.map((r) => ({ ...r, createdAt: iso(r.createdAt) })),
     expenses: expenseRows.map((r) => ({ ...r, createdAt: iso(r.createdAt) })),
     purchases: purchaseRows.map((r) => ({ ...r, createdAt: iso(r.createdAt) })),
@@ -1518,7 +2438,8 @@ router.post("/day-archives/close", async (req, res): Promise<void> => {
     return;
   }
   const date = parsed.data.date ?? new Date().toISOString().slice(0, 10);
-  const closedBy = (parsed.data.closedBy || "manager").trim() || "manager";
+  const { actorFrom } = await import("../auth/middleware");
+  const closedBy = actorFrom(req, parsed.data.closedBy);
   const notes = parsed.data.notes?.trim() || null;
   const force = Boolean(parsed.data.force);
 

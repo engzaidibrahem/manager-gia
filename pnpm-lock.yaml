@@ -60,6 +60,9 @@ catalogs:
     tailwindcss:
       specifier: ^4.1.14
       version: 4.3.3
+    tsx:
+      specifier: ^4.23.1
+      version: 4.23.1
     vite:
       specifier: ^7.3.2
       version: 7.3.6
@@ -169,6 +172,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/inventory-math':
+        specifier: workspace:*
+        version: link:../../lib/inventory-math
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
@@ -181,6 +187,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      pg:
+        specifier: ^8.22.0
+        version: 8.22.0
       pino:
         specifier: ^9.14.0
         version: 9.14.0
@@ -203,6 +212,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.9.5
+      '@types/pg':
+        specifier: ^8.20.0
+        version: 8.20.0
       cross-env:
         specifier: ^7.0.3
         version: 7.0.3
@@ -218,6 +230,9 @@ importers:
       thread-stream:
         specifier: 3.1.0
         version: 3.1.0
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.1
 
   artifacts/gia-shawarma-manager:
     devDependencies:
@@ -338,6 +353,9 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
+      '@workspace/inventory-math':
+        specifier: workspace:*
+        version: link:../../lib/inventory-math
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -465,6 +483,15 @@ importers:
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
+
+  lib/inventory-math:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.9.5
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
 
 packages:
 
