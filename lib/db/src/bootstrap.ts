@@ -269,6 +269,59 @@ const MIGRATIONS = [
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`,
+  // --- GIA V3 simple warehouse ---
+  `CREATE TABLE IF NOT EXISTS v3_inventory_items (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT '',
+  base_unit TEXT NOT NULL DEFAULT '',
+  minimum_stock NUMERIC(14, 4),
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  warehouse_qty_numeric NUMERIC(14, 4),
+  kitchen_qty_numeric NUMERIC(14, 4),
+  qr_token TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS v3_inventory_items_qr_token_uidx ON v3_inventory_items (qr_token)`,
+  `CREATE TABLE IF NOT EXISTS v3_opening_balances (
+  id SERIAL PRIMARY KEY,
+  inventory_item_id INTEGER NOT NULL REFERENCES v3_inventory_items(id),
+  balance_date DATE NOT NULL,
+  quantity_numeric NUMERIC(14, 4),
+  quantity_raw TEXT NOT NULL,
+  unit_raw TEXT NOT NULL DEFAULT '',
+  notes TEXT,
+  created_by TEXT NOT NULL DEFAULT '',
+  user_id INTEGER,
+  batch_key TEXT,
+  movement_id INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
+  `CREATE TABLE IF NOT EXISTS v3_warehouse_movements (
+  id SERIAL PRIMARY KEY,
+  inventory_item_id INTEGER NOT NULL REFERENCES v3_inventory_items(id),
+  movement_type TEXT NOT NULL,
+  quantity_numeric NUMERIC(14, 4),
+  quantity_raw TEXT NOT NULL,
+  unit_raw TEXT NOT NULL DEFAULT '',
+  movement_date DATE NOT NULL,
+  supplier TEXT,
+  receiver TEXT,
+  user_id INTEGER,
+  actor TEXT NOT NULL DEFAULT '',
+  purchase_id INTEGER,
+  opening_balance_id INTEGER,
+  notes TEXT,
+  batch_key TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  voided_at TIMESTAMPTZ,
+  voided_by TEXT,
+  void_reason TEXT,
+  client_request_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS v3_warehouse_movements_client_request_uidx ON v3_warehouse_movements (client_request_id)`,
 ];
 
 export async function bootstrapSchema(database: AppDatabase): Promise<void> {

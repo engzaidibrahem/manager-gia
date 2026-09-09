@@ -17,19 +17,35 @@ export function canAccess(role: Role, method: string, path: string): boolean {
   if (role === "warehouse") {
     if (write && p.includes("/backfill-legacy")) return false;
     // Opening balance is owner/manager only
-    if (write && p.includes("/opening-balance")) return false;
-    if (p.startsWith("/inventory") || p.startsWith("/purchases") || p.startsWith("/warehouse-archives") || p.startsWith("/day-archives")) {
+    if (write && (p.includes("/opening-balance") || p.includes("/warehouse/opening"))) return false;
+    if (
+      p.startsWith("/inventory")
+      || p.startsWith("/purchases")
+      || p.startsWith("/warehouse-archives")
+      || p.startsWith("/day-archives")
+      || p.startsWith("/v3")
+    ) {
       return true;
     }
     return !write && (p.startsWith("/dashboard") || p.startsWith("/recipes") || p.startsWith("/staff") || p.startsWith("/finance") || p.startsWith("/waste"));
   }
 
   if (role === "kitchen") {
-    if (p.startsWith("/inventory/issue") || p.startsWith("/inventory/lots") || p.startsWith("/inventory/items") || p.startsWith("/waste") || p.includes("/movements") || p.includes("/transfers")) {
+    if (
+      p.startsWith("/inventory/issue")
+      || p.startsWith("/inventory/lots")
+      || p.startsWith("/inventory/items")
+      || p.startsWith("/waste")
+      || p.includes("/movements")
+      || p.includes("/transfers")
+      || p.startsWith("/v3/kitchen")
+      || p.startsWith("/v3/warehouse/to-kitchen")
+      || (p.startsWith("/v3/") && !write)
+    ) {
       return true;
     }
     if (p.startsWith("/recipes") || p.startsWith("/dashboard")) return !write;
-    return !write && (p.startsWith("/inventory") || p.startsWith("/kitchen"));
+    return !write && (p.startsWith("/inventory") || p.startsWith("/kitchen") || p.startsWith("/v3"));
   }
 
   if (role === "cashier") {

@@ -7,25 +7,20 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { clearSession, fetchMe, getStoredToken, getStoredUser, installAuthFetch, type AuthUser } from '@/lib/auth';
 import { type Lang } from '@/lib/i18n';
-import { DashboardPage } from '@/pages/dashboard';
-import { ArchivesPage } from '@/pages/archives';
-import { FinancePage } from '@/pages/finance';
-import { InventoryPage } from '@/pages/inventory';
-import { KitchenPage } from '@/pages/kitchen';
 import { LoginPage } from '@/pages/login';
 import NotFound from '@/pages/not-found';
-import { OpeningBalancePage } from '@/pages/opening-balance';
-import { PurchasesPage } from '@/pages/purchases';
-import { RecipesPage } from '@/pages/recipes';
-import { StaffPage } from '@/pages/staff';
-import { WastePage } from '@/pages/waste';
-import { WarehouseArchivePage } from '@/pages/warehouse-archive';
+import { V3SummaryPage } from '@/pages/v3/summary';
+import { V3WarehousePage } from '@/pages/v3/warehouse';
+import { V3OpeningPage } from '@/pages/v3/opening';
+import { V3WarehouseInPage } from '@/pages/v3/warehouse-in';
+import { V3WarehouseOutPage } from '@/pages/v3/warehouse-out';
+import { V3KitchenPage } from '@/pages/v3/kitchen';
 
 const queryClient = new QueryClient();
 installAuthFetch();
 
 function AppRouter({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
-  const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('gia-lang') as Lang) || 'id');
+  const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('gia-lang') as Lang) || 'ar');
   const changeLang = (value: Lang) => {
     setLang(value);
     localStorage.setItem('gia-lang', value);
@@ -35,17 +30,12 @@ function AppRouter({ user, onLogout }: { user: AuthUser; onLogout: () => void })
     <Shell lang={lang} setLang={changeLang} user={user} onLogout={onLogout}>
       <ErrorBoundary resetKey={location.pathname}>
         <Switch>
-          <Route path="/" component={() => <DashboardPage lang={lang} />} />
-          <Route path="/archives" component={() => <ArchivesPage lang={lang} />} />
-          <Route path="/inventory" component={() => <InventoryPage lang={lang} />} />
-          <Route path="/opening-balance" component={() => <OpeningBalancePage lang={lang} />} />
-          <Route path="/warehouse-archive" component={() => <WarehouseArchivePage lang={lang} />} />
-          <Route path="/kitchen" component={() => <KitchenPage lang={lang} />} />
-          <Route path="/purchases" component={() => <PurchasesPage lang={lang} />} />
-          <Route path="/recipes" component={() => <RecipesPage lang={lang} />} />
-          <Route path="/waste" component={() => <WastePage lang={lang} />} />
-          <Route path="/finance" component={() => <FinancePage lang={lang} />} />
-          <Route path="/staff" component={() => <StaffPage lang={lang} />} />
+          <Route path="/" component={() => <V3SummaryPage lang={lang} />} />
+          <Route path="/warehouse" component={() => <V3WarehousePage lang={lang} />} />
+          <Route path="/opening" component={() => <V3OpeningPage lang={lang} />} />
+          <Route path="/warehouse-in" component={() => <V3WarehouseInPage lang={lang} />} />
+          <Route path="/warehouse-out" component={() => <V3WarehouseOutPage lang={lang} />} />
+          <Route path="/kitchen" component={() => <V3KitchenPage lang={lang} />} />
           <Route component={NotFound} />
         </Switch>
       </ErrorBoundary>
@@ -54,7 +44,7 @@ function AppRouter({ user, onLogout }: { user: AuthUser; onLogout: () => void })
 }
 
 function App() {
-  const [lang] = useState<Lang>(() => (localStorage.getItem('gia-lang') as Lang) || 'id');
+  const [lang] = useState<Lang>(() => (localStorage.getItem('gia-lang') as Lang) || 'ar');
   const [user, setUser] = useState<AuthUser | null>(() => (getStoredToken() ? getStoredUser() : null));
   const [checking, setChecking] = useState(Boolean(getStoredToken()));
 

@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from 'react';
 import {
-  Archive, Boxes, Calculator, ChevronRight, ClipboardList, Coffee, DollarSign, Globe2, LayoutDashboard, Menu, PackageSearch, ShieldCheck, ShoppingBag, Trash2, UsersRound, X,
+  Boxes, ChevronRight, ClipboardList, Coffee, Globe2, LayoutDashboard, Menu, PackageMinus, PackagePlus, ShieldCheck, X,
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useT, type Lang } from '@/lib/i18n';
@@ -21,18 +21,13 @@ export function Shell({
   const t = useT(lang);
   const role = user?.role ?? '';
   const canOpeningBalance = role === 'owner' || role === 'manager';
-  const nav: { href: string; key: string; icon: IconType }[] = [
-    { href: '/', key: 'dashboard', icon: LayoutDashboard },
-    { href: '/inventory', key: 'inventory', icon: Boxes },
-    ...(canOpeningBalance ? [{ href: '/opening-balance', key: 'openingBalanceStock', icon: ClipboardList } as const] : []),
-    { href: '/purchases', key: 'purchases', icon: ShoppingBag },
-    { href: '/finance', key: 'finance', icon: DollarSign },
-    { href: '/kitchen', key: 'kitchen', icon: Coffee },
-    { href: '/recipes', key: 'recipes', icon: Calculator },
-    { href: '/archives', key: 'archives', icon: Archive },
-    { href: '/warehouse-archive', key: 'warehouseArchive', icon: PackageSearch },
-    { href: '/waste', key: 'waste', icon: Trash2 },
-    { href: '/staff', key: 'staff', icon: UsersRound },
+  const nav: { href: string; label: string; icon: IconType }[] = [
+    { href: '/', label: lang === 'id' ? 'Ringkasan' : 'ملخص', icon: LayoutDashboard },
+    { href: '/warehouse', label: lang === 'id' ? 'Gudang' : 'المستودع', icon: Boxes },
+    ...(canOpeningBalance ? [{ href: '/opening', label: lang === 'id' ? 'Saldo awal' : 'رصيد الافتتاح', icon: ClipboardList }] : []),
+    { href: '/warehouse-in', label: lang === 'id' ? 'Masuk gudang' : 'إدخال إلى المستودع', icon: PackagePlus },
+    { href: '/warehouse-out', label: lang === 'id' ? 'Keluar dapur' : 'إخراج إلى المطبخ', icon: PackageMinus },
+    { href: '/kitchen', label: lang === 'id' ? 'Dapur' : 'المطبخ', icon: Coffee },
   ];
   return (
     <div className={`app-shell grain ${lang === 'ar' ? 'rtl' : ''}`}>
@@ -40,17 +35,17 @@ export function Shell({
         <div className="flex shrink-0 items-center justify-between px-2">
           <Link href="/" className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[0_4px_0_hsl(17_78%_32%)]"><span className="text-lg font-bold">G</span></span>
-            <span><span className="block text-[15px] font-bold tracking-tight">Gia Shawarma</span><span className="block text-[10px] font-medium uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Manager</span></span>
+            <span><span className="block text-[15px] font-bold tracking-tight">Gia V3</span><span className="block text-[10px] font-medium uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">{lang === 'id' ? 'Sederhana' : 'بسيط'}</span></span>
           </Link>
           <button onClick={() => setMobileOpen(false)} className="rounded-lg p-1 md:hidden"><X size={18} /></button>
         </div>
-        <div className="mt-8 shrink-0 px-2 text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">{lang === 'id' ? 'Operasional' : 'التشغيل'}</div>
+        <div className="mt-8 shrink-0 px-2 text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">{lang === 'id' ? 'Gudang' : 'المستودع'}</div>
         <nav className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto pb-2">
-          {nav.map(({ href, key, icon: Icon }) => {
+          {nav.map(({ href, label, icon: Icon }) => {
             const active = location === href;
             return (
               <Link key={href} href={href} onClick={() => setMobileOpen(false)} className={`nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-[13px] font-semibold ${active ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-[0_3px_0_hsl(17_78%_32%)]' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]'}`}>
-                <Icon size={17} strokeWidth={active ? 2.5 : 1.8} /><span>{t(key)}</span>{active && <ChevronRight size={14} className="ml-auto rtl:rotate-180" />}
+                <Icon size={17} strokeWidth={active ? 2.5 : 1.8} /><span>{label}</span>{active && <ChevronRight size={14} className="ml-auto rtl:rotate-180" />}
               </Link>
             );
           })}
@@ -59,13 +54,8 @@ export function Shell({
           <div className="mb-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3">
             <div className="flex items-start gap-2 text-xs font-semibold leading-snug text-[hsl(var(--foreground))]">
               <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[hsl(var(--primary))]" />
-              <span>{lang === 'id' ? 'Kontrol biaya & stok harian' : 'ضبط التكلفة والمخزون يومياً'}</span>
+              <span>{lang === 'id' ? 'Gudang dulu, lalu sisanya' : 'المستودع أولاً ثم الباقي'}</span>
             </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-[hsl(var(--muted-foreground))]">
-              {lang === 'id'
-                ? 'Isi gudang → beli → transfer dapur → hitung resep.'
-                : 'عبّئ المستودع ← اشترِ ← حوّل للمطبخ ← احسب الوصفة.'}
-            </p>
           </div>
           <button onClick={() => setLang(lang === 'id' ? 'ar' : 'id')} className="flex w-full items-center justify-between rounded-xl border border-[hsl(var(--border))] px-3 py-2.5 text-xs font-semibold hover:bg-[hsl(var(--muted))]">
             <span className="flex items-center gap-2"><Globe2 size={15} />{t('languages')}</span><span className="font-mono text-[10px] text-[hsl(var(--muted-foreground))]">{lang === 'id' ? 'ID' : 'AR'}</span>
@@ -113,7 +103,7 @@ export function PageTitle({ eyebrow, title, description, action }: { eyebrow: st
   );
 }
 
-export function Metric({ label, value, detail, icon: Icon, tone = 'default' }: { label: string; value: string; detail: string; icon: IconType; tone?: string }) {
+export function Metric({ label, value, detail, icon: Icon, tone = 'default' }: { label: string; value: string; detail?: string; icon: IconType; tone?: string }) {
   return (
     <div style={tone === 'primary' ? { backgroundColor: 'hsl(var(--primary))', borderColor: 'hsl(var(--primary))' } : undefined} className={`panel soft-shadow relative overflow-hidden p-5 ${tone === 'primary' ? 'text-[hsl(var(--primary-foreground))]' : ''}`}>
       <div className="flex items-start justify-between">
@@ -121,7 +111,7 @@ export function Metric({ label, value, detail, icon: Icon, tone = 'default' }: {
         <span className={`rounded-lg p-2 ${tone === 'primary' ? 'bg-[hsl(var(--primary-foreground)/.12)]' : 'bg-[hsl(var(--secondary))]'}`}><Icon size={16} /></span>
       </div>
       <div className={`number mt-4 text-2xl font-semibold ${tone === 'primary' ? '' : 'text-[hsl(var(--foreground))]'}`}>{value}</div>
-      <div className={`mt-2 text-xs ${tone === 'primary' ? 'text-[hsl(var(--primary-foreground)/.68)]' : 'text-[hsl(var(--muted-foreground))]'}`}>{detail}</div>
+      <div className={`mt-2 text-xs ${tone === 'primary' ? 'text-[hsl(var(--primary-foreground)/.68)]' : 'text-[hsl(var(--muted-foreground))]'}`}>{detail || '—'}</div>
     </div>
   );
 }
