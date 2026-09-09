@@ -280,6 +280,12 @@ const MIGRATIONS = [
   warehouse_qty_numeric NUMERIC(14, 4),
   kitchen_qty_numeric NUMERIC(14, 4),
   qr_token TEXT NOT NULL DEFAULT '',
+  source_type TEXT NOT NULL DEFAULT 'MANUAL',
+  source_excel_row INTEGER,
+  original_name_raw TEXT,
+  needs_quantity_review BOOLEAN NOT NULL DEFAULT FALSE,
+  needs_review BOOLEAN NOT NULL DEFAULT FALSE,
+  import_batch_key TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`,
@@ -296,6 +302,8 @@ const MIGRATIONS = [
   user_id INTEGER,
   batch_key TEXT,
   movement_id INTEGER,
+  source_excel_row INTEGER,
+  needs_quantity_review BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`,
   `CREATE TABLE IF NOT EXISTS v3_warehouse_movements (
@@ -314,6 +322,9 @@ const MIGRATIONS = [
   opening_balance_id INTEGER,
   notes TEXT,
   batch_key TEXT,
+  source_excel_row INTEGER,
+  original_name_raw TEXT,
+  needs_review BOOLEAN NOT NULL DEFAULT FALSE,
   status TEXT NOT NULL DEFAULT 'active',
   voided_at TIMESTAMPTZ,
   voided_by TEXT,
@@ -322,6 +333,18 @@ const MIGRATIONS = [
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS v3_warehouse_movements_client_request_uidx ON v3_warehouse_movements (client_request_id)`,
+  // GIA V3 column extensions for existing DBs created before PHASE 5
+  `ALTER TABLE v3_inventory_items ADD COLUMN IF NOT EXISTS source_type TEXT NOT NULL DEFAULT 'MANUAL'`,
+  `ALTER TABLE v3_inventory_items ADD COLUMN IF NOT EXISTS source_excel_row INTEGER`,
+  `ALTER TABLE v3_inventory_items ADD COLUMN IF NOT EXISTS original_name_raw TEXT`,
+  `ALTER TABLE v3_inventory_items ADD COLUMN IF NOT EXISTS needs_quantity_review BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE v3_inventory_items ADD COLUMN IF NOT EXISTS needs_review BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE v3_inventory_items ADD COLUMN IF NOT EXISTS import_batch_key TEXT`,
+  `ALTER TABLE v3_opening_balances ADD COLUMN IF NOT EXISTS source_excel_row INTEGER`,
+  `ALTER TABLE v3_opening_balances ADD COLUMN IF NOT EXISTS needs_quantity_review BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE v3_warehouse_movements ADD COLUMN IF NOT EXISTS source_excel_row INTEGER`,
+  `ALTER TABLE v3_warehouse_movements ADD COLUMN IF NOT EXISTS original_name_raw TEXT`,
+  `ALTER TABLE v3_warehouse_movements ADD COLUMN IF NOT EXISTS needs_review BOOLEAN NOT NULL DEFAULT FALSE`,
 ];
 
 export async function bootstrapSchema(database: AppDatabase): Promise<void> {

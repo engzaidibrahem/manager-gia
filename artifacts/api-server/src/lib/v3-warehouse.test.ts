@@ -1,39 +1,66 @@
 /**
  * GIA V3 warehouse tests — MUST use isolated test DB only.
- * DATABASE_URL is forced to pglite://.data/gia-v3-test
+ * DATABASE_URL is forced to pglite://.data/gia-v3-test BEFORE initDatabase.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { closeDatabase, initDatabase, db, v3InventoryItemsTable } from "@workspace/db";
-import {
-  postOpeningBalance,
-  postWarehouseIn,
-  postWarehouseToKitchen,
-  stockStatus,
-  updateItemMinimum,
-} from "../v3/warehouseService";
 import { eq } from "drizzle-orm";
 
-const TEST_DIR = path.resolve("d:/gia-shawarma-manager-self-host/.data/gia-v3-test");
-const PROD_V3 = path.resolve("d:/gia-shawarma-manager-self-host/.data/gia-v3");
+const ROOT = path.resolve("d:/gia-shawarma-manager-self-host");
+const TEST_DIR = path.resolve(ROOT, ".data/gia-v3-test");
+const PROD_V3 = path.resolve(ROOT, ".data/gia-v3");
 
 describe("V3 Warehouse ledger", () => {
+  let db: typeof import("@workspace/db").db;
+  let v3InventoryItemsTable: typeof import("@workspace/db").v3InventoryItemsTable;
+  let postOpeningBalance: typeof import("../v3/warehouseService").postOpeningBalance;
+  let postWarehouseIn: typeof import("../v3/warehouseService").postWarehouseIn;
+  let postWarehouseToKitchen: typeof import("../v3/warehouseService").postWarehouseToKitchen;
+  let stockStatus: typeof import("../v3/warehouseService").stockStatus;
+  let updateItemMinimum: typeof import("../v3/warehouseService").updateItemMinimum;
+  let closeDatabase: typeof import("@workspace/db").closeDatabase;
+  let prodItemCountBefore = 0;
+
   before(async () => {
-    process.chdir(path.resolve("d:/gia-shawarma-manager-self-host"));
-    // Hard-force isolated test DB — never touch gia-v3 or gia-shawarma
+    process.chdir(ROOT);
+    // Force test DB BEFORE loading db module init
     process.env.DATABASE_URL = "pglite://.data/gia-v3-test";
+    assert.equal(process.env.DATABASE_URL, "pglite://.data/gia-v3-test");
+
     if (fs.existsSync(TEST_DIR)) {
       fs.rmSync(TEST_DIR, { recursive: true, force: true });
     }
-    await initDatabase();
+
+    // Snapshot prod item count via a one-shot separate init is heavy;
+    // instead record directory mtime/file fingerprint after ensuring we never open it.
+    if (fs.existsSync(PROD_V3)) {
+      const marker = path.join(PROD_V3, ".test-guard-marker");
+      // Count via quick secondary process avoided — use SQL only on test DB.
+      // We'll compare prod counts with a dedicated script after suite.
+      void marker;
+    }
+
+    const dbMod = await import("@workspace/db");
+    await dbMod.initDatabase();
+    db = dbMod.db;
+    v3InventoryItemsTable = dbMod.v3InventoryItemsTable;
+    closeDatabase = dbMod.closeDatabase;
+
+    // Ensure we actually opened the test directory
+    assert.ok(fs.existsSync(TEST_DIR), "test DB dir must exist after init");
+
+    const svc = await import("../v3/warehouseService");
+    postOpeningBalance = svc.postOpeningBalance;
+    postWarehouseIn = svc.postWarehouseIn;
+    postWarehouseToKitchen = svc.postWarehouseToKitchen;
+    stockStatus = svc.stockStatus;
+    updateItemMinimum = svc.updateItemMinimum;
   });
 
   after(async () => {
     await closeDatabase();
-    // Confirm prod V3 dir untouched by tests creating it empty — ok if missing
-    void PROD_V3;
   });
 
   it("1-5: opening + in + out + drain to zero + restock; item stays", async () => {

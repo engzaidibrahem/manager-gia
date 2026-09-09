@@ -1,0 +1,3356 @@
+{
+  "mode": "APPLY",
+  "batchKey": "gia-v3-initial-excel-import-2026-09",
+  "excelPath": "d:/gia-files/جرد_المستودع_والمطبخ_مصحح_نهائي.xlsx",
+  "excelSha256": "8340ececf9ad5035936e1aa4e7c1cf49941c29dcb016e327326bfcdb6aa8c9e0",
+  "backupPath": "d:\\gia-shawarma-manager-self-host\\backups\\gia-v3.backup-pre-import-2026-09-09-17-06-29",
+  "dbPath": "d:\\gia-shawarma-manager-self-host\\.data\\gia-v3",
+  "masterRowsImported": 140,
+  "masterRowsIdempotent": 0,
+  "openingMovementsImported": 140,
+  "openingMovementsIdempotent": 0,
+  "warehouseInImported": 66,
+  "warehouseInIdempotent": 0,
+  "warehouseOutImported": 65,
+  "warehouseOutIdempotent": 0,
+  "movementCreatedItems": 49,
+  "movementCreatedIdempotent": 0,
+  "sourceRowsDropped": 0,
+  "duplicateMovementImports": 0,
+  "preservedExactDuplicateNames": [
+    "اوريغانو",
+    "خميرة فورية",
+    "ليمون"
+  ],
+  "movementCreatedUnmappedNames": [
+    "منظف ارضيات",
+    "كيس شاي",
+    "نسكافيه",
+    "هوت شوكلت",
+    "مسحوق غسيل ثياب",
+    "نسكفيه سائل",
+    "شاي اخضر",
+    "كبتشينو",
+    "قهوة",
+    "بطاطا مثلجة",
+    "ميلو",
+    "كولجان",
+    "كاسات ورق مطبوعة (800ml)",
+    "أغطية ماسات",
+    "اكواب بلاستيك (700ml)",
+    "اغطية اكواب",
+    "زيت عبوات",
+    "زيت زيتون",
+    "صوص hp",
+    "صوص صويا مالح",
+    "صوص صويا حلوة abc",
+    "صوص صويا حلوة ةشىهس",
+    "صوص حار اندوفود",
+    "صوص حار abc",
+    "محارم مطبخ رول",
+    "محارم مطبخ عادية",
+    "رول تواليت",
+    "محارم يد",
+    "سائل جلي أكياس",
+    "معطر ارضيات أكياس",
+    "علبة معطر ارضيات",
+    "صواني صغار",
+    "صواني كبار",
+    "صحون قزاز بيض",
+    "لحمة ناعمة",
+    "صدر دجاج",
+    "دلو تتنظيف",
+    "صابون ايدي",
+    "ة ليمون",
+    "مسحوق غسيل",
+    "نسكفيه",
+    "سكوار صغير",
+    "سكوار كبير",
+    "مصافي",
+    "ملح",
+    "معلقة نشاء كبيرة",
+    "زيت",
+    "خس",
+    "بطاطا مفرزة"
+  ],
+  "needsReviewItems": [
+    {
+      "id": 41,
+      "name": "بخاخة ماء",
+      "reason": "needs_review",
+      "openingRaw": "1"
+    },
+    {
+      "id": 59,
+      "name": "مصفاية جاط كبير",
+      "reason": "needs_review",
+      "openingRaw": "1"
+    },
+    {
+      "id": 69,
+      "name": "أرز اندونيسي",
+      "reason": "needs_quantity_review",
+      "openingRaw": "1 كيس وزن 10 كيلو"
+    },
+    {
+      "id": 70,
+      "name": "ارز مندي",
+      "reason": "needs_quantity_review",
+      "openingRaw": "10kg كيس 5+5"
+    },
+    {
+      "id": 71,
+      "name": "دبس بندورة",
+      "reason": "needs_quantity_review",
+      "openingRaw": "علبة 3 كيلو"
+    },
+    {
+      "id": 90,
+      "name": "حلبة",
+      "reason": "needs_review",
+      "openingRaw": "2 كيس g200"
+    },
+    {
+      "id": 75,
+      "name": "اكليل الجبل",
+      "reason": "needs_quantity_review",
+      "openingRaw": "علبة صغيرة"
+    },
+    {
+      "id": 99,
+      "name": "كاري",
+      "reason": "needs_review",
+      "openingRaw": "2"
+    },
+    {
+      "id": 73,
+      "name": "ملح صيني",
+      "reason": "needs_review",
+      "openingRaw": "2 كيس"
+    },
+    {
+      "id": 87,
+      "name": "جوزة الطيب",
+      "reason": "needs_review",
+      "openingRaw": "2 كيس g200"
+    },
+    {
+      "id": 82,
+      "name": "هيل حب",
+      "reason": "needs_quantity_review",
+      "openingRaw": "2 كيس g+100g100"
+    },
+    {
+      "id": 86,
+      "name": "قرنفل",
+      "reason": "needs_review",
+      "openingRaw": "2 كيس g200"
+    },
+    {
+      "id": 92,
+      "name": "زنجبيل",
+      "reason": "needs_review",
+      "openingRaw": "2 كيس g400"
+    },
+    {
+      "id": 84,
+      "name": "كزبرة",
+      "reason": "needs_quantity_review",
+      "openingRaw": "2 كيس g+100g500"
+    },
+    {
+      "id": 72,
+      "name": "كولجين",
+      "reason": "needs_quantity_review",
+      "openingRaw": "كيس صغير"
+    },
+    {
+      "id": 74,
+      "name": "كراويا",
+      "reason": "needs_review",
+      "openingRaw": "3 كيس صغير"
+    },
+    {
+      "id": 78,
+      "name": "نشاء",
+      "reason": "needs_quantity_review",
+      "openingRaw": "1 طرد 9 كيلو"
+    },
+    {
+      "id": 79,
+      "name": "اوريغانو",
+      "reason": "needs_quantity_review",
+      "openingRaw": "2 كيس g+100g100"
+    },
+    {
+      "id": 80,
+      "name": "ورق غار",
+      "reason": "needs_quantity_review",
+      "openingRaw": "2 كيس g+350g100"
+    },
+    {
+      "id": 100,
+      "name": "فلفل احمر",
+      "reason": "needs_quantity_review",
+      "openingRaw": "g500 علبة"
+    },
+    {
+      "id": 105,
+      "name": "محارم تواليت",
+      "reason": "needs_quantity_review",
+      "openingRaw": "30رول   3أكياس كبيرة"
+    },
+    {
+      "id": 107,
+      "name": "سيف",
+      "reason": "needs_quantity_review",
+      "openingRaw": "1 طرد قطعة95 + اربع قطع كبيرة"
+    },
+    {
+      "id": 89,
+      "name": "قرفة",
+      "reason": "needs_review",
+      "openingRaw": "2 كيس g200"
+    },
+    {
+      "id": 124,
+      "name": "جزر",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 113,
+      "name": "لودلين",
+      "reason": "needs_review",
+      "openingRaw": "2"
+    },
+    {
+      "id": 125,
+      "name": "ليمون",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 127,
+      "name": "ملفوف",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 128,
+      "name": "ثوم",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 129,
+      "name": "دبس فليفة",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 130,
+      "name": "موزاريلا",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 95,
+      "name": "بصل بودرة",
+      "reason": "needs_review",
+      "openingRaw": "1 كيلو"
+    },
+    {
+      "id": 132,
+      "name": "مماسمح ارض",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 133,
+      "name": "عصاية تنظيف طويلة",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 134,
+      "name": "مقشة ارض",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 135,
+      "name": "سلم",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 136,
+      "name": "علاقة حديد",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 137,
+      "name": "مكيف صغير للمستودع",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 141,
+      "name": "منظف ارضيات",
+      "reason": "needs_review"
+    },
+    {
+      "id": 116,
+      "name": "زيت نخيل",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 118,
+      "name": "زيت دوار الشمس",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 122,
+      "name": "دجاج",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 121,
+      "name": "فانيليا",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 123,
+      "name": "صدر بجلدة",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 131,
+      "name": "بندورة",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 139,
+      "name": "أرز مندي",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 140,
+      "name": "صحون بلاستيك و معالق",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 126,
+      "name": "برتقال",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 120,
+      "name": "سوسيرات",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 144,
+      "name": "هوت شوكلت",
+      "reason": "needs_review"
+    },
+    {
+      "id": 145,
+      "name": "مسحوق غسيل ثياب",
+      "reason": "needs_review"
+    },
+    {
+      "id": 147,
+      "name": "شاي اخضر",
+      "reason": "needs_review"
+    },
+    {
+      "id": 149,
+      "name": "قهوة",
+      "reason": "needs_review"
+    },
+    {
+      "id": 148,
+      "name": "كبتشينو",
+      "reason": "needs_review"
+    },
+    {
+      "id": 151,
+      "name": "ميلو",
+      "reason": "needs_review"
+    },
+    {
+      "id": 150,
+      "name": "بطاطا مثلجة",
+      "reason": "needs_review"
+    },
+    {
+      "id": 158,
+      "name": "زيت زيتون",
+      "reason": "needs_review"
+    },
+    {
+      "id": 152,
+      "name": "كولجان",
+      "reason": "needs_review"
+    },
+    {
+      "id": 153,
+      "name": "كاسات ورق مطبوعة (800ml)",
+      "reason": "needs_review"
+    },
+    {
+      "id": 154,
+      "name": "أغطية ماسات",
+      "reason": "needs_review"
+    },
+    {
+      "id": 155,
+      "name": "اكواب بلاستيك (700ml)",
+      "reason": "needs_review"
+    },
+    {
+      "id": 156,
+      "name": "اغطية اكواب",
+      "reason": "needs_review"
+    },
+    {
+      "id": 157,
+      "name": "زيت عبوات",
+      "reason": "needs_review"
+    },
+    {
+      "id": 168,
+      "name": "محارم يد",
+      "reason": "needs_review"
+    },
+    {
+      "id": 159,
+      "name": "صوص hp",
+      "reason": "needs_review"
+    },
+    {
+      "id": 160,
+      "name": "صوص صويا مالح",
+      "reason": "needs_review"
+    },
+    {
+      "id": 162,
+      "name": "صوص صويا حلوة ةشىهس",
+      "reason": "needs_review"
+    },
+    {
+      "id": 163,
+      "name": "صوص حار اندوفود",
+      "reason": "needs_review"
+    },
+    {
+      "id": 164,
+      "name": "صوص حار abc",
+      "reason": "needs_review"
+    },
+    {
+      "id": 165,
+      "name": "محارم مطبخ رول",
+      "reason": "needs_review"
+    },
+    {
+      "id": 166,
+      "name": "محارم مطبخ عادية",
+      "reason": "needs_review"
+    },
+    {
+      "id": 167,
+      "name": "رول تواليت",
+      "reason": "needs_review"
+    },
+    {
+      "id": 172,
+      "name": "صواني صغار",
+      "reason": "needs_review"
+    },
+    {
+      "id": 169,
+      "name": "سائل جلي أكياس",
+      "reason": "needs_review"
+    },
+    {
+      "id": 170,
+      "name": "معطر ارضيات أكياس",
+      "reason": "needs_review"
+    },
+    {
+      "id": 171,
+      "name": "علبة معطر ارضيات",
+      "reason": "needs_review"
+    },
+    {
+      "id": 146,
+      "name": "نسكفيه سائل",
+      "reason": "needs_review"
+    },
+    {
+      "id": 142,
+      "name": "كيس شاي",
+      "reason": "needs_review"
+    },
+    {
+      "id": 143,
+      "name": "نسكافيه",
+      "reason": "needs_review"
+    },
+    {
+      "id": 179,
+      "name": "ة ليمون",
+      "reason": "needs_review"
+    },
+    {
+      "id": 180,
+      "name": "مسحوق غسيل",
+      "reason": "needs_review"
+    },
+    {
+      "id": 181,
+      "name": "نسكفيه",
+      "reason": "needs_review"
+    },
+    {
+      "id": 35,
+      "name": "براشة كبيرة",
+      "reason": "needs_review",
+      "openingRaw": "1"
+    },
+    {
+      "id": 182,
+      "name": "سكوار صغير",
+      "reason": "needs_review"
+    },
+    {
+      "id": 186,
+      "name": "معلقة نشاء كبيرة",
+      "reason": "needs_review"
+    },
+    {
+      "id": 187,
+      "name": "زيت",
+      "reason": "needs_review"
+    },
+    {
+      "id": 188,
+      "name": "خس",
+      "reason": "needs_review"
+    },
+    {
+      "id": 189,
+      "name": "بطاطا مفرزة",
+      "reason": "needs_review"
+    },
+    {
+      "id": 173,
+      "name": "صواني كبار",
+      "reason": "needs_review"
+    },
+    {
+      "id": 174,
+      "name": "صحون قزاز بيض",
+      "reason": "needs_review"
+    },
+    {
+      "id": 183,
+      "name": "سكوار كبير",
+      "reason": "needs_review"
+    },
+    {
+      "id": 62,
+      "name": "طحين",
+      "reason": "needs_review",
+      "openingRaw": "2"
+    },
+    {
+      "id": 176,
+      "name": "صدر دجاج",
+      "reason": "needs_review"
+    },
+    {
+      "id": 177,
+      "name": "دلو تتنظيف",
+      "reason": "needs_review"
+    },
+    {
+      "id": 178,
+      "name": "صابون ايدي",
+      "reason": "needs_review"
+    },
+    {
+      "id": 76,
+      "name": "دبس رمان عصارة",
+      "reason": "needs_quantity_review",
+      "openingRaw": "عدد 5"
+    },
+    {
+      "id": 119,
+      "name": "حليب بودرة",
+      "reason": "needs_review",
+      "openingRaw": "0"
+    },
+    {
+      "id": 184,
+      "name": "مصافي",
+      "reason": "needs_review"
+    },
+    {
+      "id": 185,
+      "name": "ملح",
+      "reason": "needs_review"
+    },
+    {
+      "id": 175,
+      "name": "لحمة ناعمة",
+      "reason": "needs_review"
+    },
+    {
+      "id": 161,
+      "name": "صوص صويا حلوة abc",
+      "reason": "needs_review"
+    }
+  ],
+  "reconciliation": [
+    {
+      "source": "master",
+      "excelRow": 3,
+      "name": "مقالية تيفال",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 1,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 4,
+      "name": "ابريق بالستيك",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 2,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 5,
+      "name": "طناجر صغيرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 3,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 6,
+      "name": "سوسيرة بالستيك",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 4,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 4,
+      "quantityRaw": "4"
+    },
+    {
+      "source": "master",
+      "excelRow": 7,
+      "name": "سطل كبير",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 5,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 8,
+      "name": "طنجرة ستالس كبيرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 6,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 9,
+      "name": "مكيال بالستيك",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 7,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 10,
+      "name": "ممسحة شيف خرقة ) (",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 8,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 6,
+      "quantityRaw": "6"
+    },
+    {
+      "source": "master",
+      "excelRow": 11,
+      "name": "معالق طعام",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 9,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 10,
+      "quantityRaw": "10"
+    },
+    {
+      "source": "master",
+      "excelRow": 12,
+      "name": "دفات تقطيع كبيرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 10,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 13,
+      "name": "دفات تقطيع",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 11,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 14,
+      "name": "وزرة جلي",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 12,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 15,
+      "name": "مصافي صغيرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 13,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 16,
+      "name": "كف للفرن",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 14,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 17,
+      "name": "سكوار طاسة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 15,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 8,
+      "quantityRaw": "8"
+    },
+    {
+      "source": "master",
+      "excelRow": 18,
+      "name": "سكوار ميونيز",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 16,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 4,
+      "quantityRaw": "4"
+    },
+    {
+      "source": "master",
+      "excelRow": 19,
+      "name": "غطاء سكوار ميونيز",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 17,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 20,
+      "name": "سكوار انتر",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 18,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 21,
+      "name": "غطاء سكوار انتر",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 19,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 22,
+      "name": "تربيعة ستالس",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 20,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 23,
+      "name": "جاط ستالس كبير",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 21,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 24,
+      "name": "جاط ستالس صغير",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 22,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 25,
+      "name": "مصافي جاط ستالس",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 23,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 26,
+      "name": "معلقة نشا كبيرة خشب",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 24,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 27,
+      "name": "برميل للنشا مع غطاء",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 25,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 28,
+      "name": "مطربان بهارات كبير",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 26,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 4,
+      "quantityRaw": "4"
+    },
+    {
+      "source": "master",
+      "excelRow": 29,
+      "name": "مصافي انتر كبير",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 27,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 30,
+      "name": "مشاحف",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 28,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 5,
+      "quantityRaw": "5"
+    },
+    {
+      "source": "master",
+      "excelRow": 31,
+      "name": "قطاعة صندويش شاورما",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 29,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 32,
+      "name": "مضرب خلط كبير",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 30,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 33,
+      "name": "مضرب خلط صغير",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 31,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 34,
+      "name": "صحون بالستيك اسود ) (",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 32,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 35,
+      "name": "مشحف بطاطا",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 33,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 36,
+      "name": "مالقط",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 34,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 4,
+      "quantityRaw": "4"
+    },
+    {
+      "source": "master",
+      "excelRow": 37,
+      "name": "براشة كبيرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 35,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 38,
+      "name": "براشة صغيرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 36,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 39,
+      "name": "معالق خشب",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 37,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 40,
+      "name": "معلقة رز",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 38,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 41,
+      "name": "معلقة ميونيز",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 39,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 4,
+      "quantityRaw": "4"
+    },
+    {
+      "source": "master",
+      "excelRow": 42,
+      "name": "كفكير",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 40,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 43,
+      "name": "بخاخة ماء",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 41,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 44,
+      "name": "كفكير مصفاية",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 42,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 45,
+      "name": "قشارة بطاطا",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 43,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 46,
+      "name": "عالقة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 44,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 47,
+      "name": "مطربان بلور",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 45,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 48,
+      "name": "مفتاح تنك",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 46,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 49,
+      "name": "قشاطة ميونيز كبيرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 47,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 50,
+      "name": "قشاطة ميونيز صغيرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 48,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 51,
+      "name": "فرشاية زيت",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 49,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 52,
+      "name": "مقص",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 50,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 53,
+      "name": "علب عصارات",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 51,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 6,
+      "quantityRaw": "6"
+    },
+    {
+      "source": "master",
+      "excelRow": 54,
+      "name": "عصارة ليمون",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 52,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 55,
+      "name": "سكوار طويل",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 53,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 56,
+      "name": "صواني",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 54,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 4,
+      "quantityRaw": "4"
+    },
+    {
+      "source": "master",
+      "excelRow": 57,
+      "name": "علبة بهارات بسطة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 55,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 58,
+      "name": "ترابيع كبيرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 56,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 9,
+      "quantityRaw": "9"
+    },
+    {
+      "source": "master",
+      "excelRow": 59,
+      "name": "مصافي ترابيع",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 57,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 5,
+      "quantityRaw": "5"
+    },
+    {
+      "source": "master",
+      "excelRow": 60,
+      "name": "مطربان بهارات وسط",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 58,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 9,
+      "quantityRaw": "9"
+    },
+    {
+      "source": "master",
+      "excelRow": 61,
+      "name": "مصفاية جاط كبير",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 59,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 62,
+      "name": "سلل خضار",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 60,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 10,
+      "quantityRaw": "10"
+    },
+    {
+      "source": "master",
+      "excelRow": 63,
+      "name": "بانيو بالستيك كبيرة مع 3 اغطية",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 61,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "master",
+      "excelRow": 64,
+      "name": "طحين",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 62,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 65,
+      "name": "سكر",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 63,
+      "openingClass": "SAFE_NUMERIC_EXTRACTION",
+      "quantityNumeric": 1,
+      "quantityRaw": "1 كيلو"
+    },
+    {
+      "source": "master",
+      "excelRow": 66,
+      "name": "ملح طعام",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 64,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 3,
+      "quantityRaw": "3 أكياس صغيرة"
+    },
+    {
+      "source": "master",
+      "excelRow": 67,
+      "name": "كياس زيت",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 65,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيس"
+    },
+    {
+      "source": "master",
+      "excelRow": 68,
+      "name": "خل تفاح",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 66,
+      "openingClass": "SAFE_NUMERIC_EXTRACTION",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 لتر"
+    },
+    {
+      "source": "master",
+      "excelRow": 69,
+      "name": "صوص حار",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 67,
+      "openingClass": "SAFE_NUMERIC_EXTRACTION",
+      "quantityNumeric": 1,
+      "quantityRaw": "1 عبوة"
+    },
+    {
+      "source": "master",
+      "excelRow": 70,
+      "name": "بهارات ماجي",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 68,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 1,
+      "quantityRaw": "1 كيس"
+    },
+    {
+      "source": "master",
+      "excelRow": 71,
+      "name": "أرز اندونيسي",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 69,
+      "openingClass": "COMPOSITE_OR_AMBIGUOUS",
+      "quantityNumeric": null,
+      "quantityRaw": "1 كيس وزن 10 كيلو"
+    },
+    {
+      "source": "master",
+      "excelRow": 72,
+      "name": "ارز مندي",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 70,
+      "openingClass": "COMPOSITE_OR_AMBIGUOUS",
+      "quantityNumeric": null,
+      "quantityRaw": "10kg كيس 5+5"
+    },
+    {
+      "source": "master",
+      "excelRow": 73,
+      "name": "دبس بندورة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 71,
+      "openingClass": "COMPOSITE_OR_AMBIGUOUS",
+      "quantityNumeric": null,
+      "quantityRaw": "علبة 3 كيلو"
+    },
+    {
+      "source": "master",
+      "excelRow": 74,
+      "name": "كولجين",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 72,
+      "openingClass": "NON_QUANTITY_TEXT",
+      "quantityNumeric": null,
+      "quantityRaw": "كيس صغير"
+    },
+    {
+      "source": "master",
+      "excelRow": 75,
+      "name": "ملح صيني",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 73,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيس"
+    },
+    {
+      "source": "master",
+      "excelRow": 76,
+      "name": "كراويا",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 74,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 3,
+      "quantityRaw": "3 كيس صغير"
+    },
+    {
+      "source": "master",
+      "excelRow": 77,
+      "name": "اكليل الجبل",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 75,
+      "openingClass": "NON_QUANTITY_TEXT",
+      "quantityNumeric": null,
+      "quantityRaw": "علبة صغيرة"
+    },
+    {
+      "source": "master",
+      "excelRow": 78,
+      "name": "دبس رمان عصارة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 76,
+      "openingClass": "COMPOSITE_OR_AMBIGUOUS",
+      "quantityNumeric": null,
+      "quantityRaw": "عدد 5"
+    },
+    {
+      "source": "master",
+      "excelRow": 79,
+      "name": "كعك ياباني",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 77,
+      "openingClass": "SAFE_NUMERIC_EXTRACTION",
+      "quantityNumeric": 1,
+      "quantityRaw": "1 كيلو"
+    },
+    {
+      "source": "master",
+      "excelRow": 80,
+      "name": "نشاء",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 78,
+      "openingClass": "COMPOSITE_OR_AMBIGUOUS",
+      "quantityNumeric": null,
+      "quantityRaw": "1 طرد 9 كيلو"
+    },
+    {
+      "source": "master",
+      "excelRow": 81,
+      "name": "اوريغانو",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 79,
+      "openingClass": "COMPOSITE_OR_AMBIGUOUS",
+      "quantityNumeric": null,
+      "quantityRaw": "2 كيس g+100g100"
+    },
+    {
+      "source": "master",
+      "excelRow": 82,
+      "name": "ورق غار",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 80,
+      "openingClass": "COMPOSITE_OR_AMBIGUOUS",
+      "quantityNumeric": null,
+      "quantityRaw": "2 كيس g+350g100"
+    },
+    {
+      "source": "master",
+      "excelRow": 83,
+      "name": "كركم",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 81,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 1,
+      "quantityRaw": "1 كيس"
+    },
+    {
+      "source": "master",
+      "excelRow": 84,
+      "name": "هيل حب",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 82,
+      "openingClass": "COMPOSITE_OR_AMBIGUOUS",
+      "quantityNumeric": null,
+      "quantityRaw": "2 كيس g+100g100"
+    },
+    {
+      "source": "master",
+      "excelRow": 85,
+      "name": "حمض ليمون",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 83,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 6,
+      "quantityRaw": "6 أكياس g600"
+    },
+    {
+      "source": "master",
+      "excelRow": 86,
+      "name": "كزبرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 84,
+      "openingClass": "COMPOSITE_OR_AMBIGUOUS",
+      "quantityNumeric": null,
+      "quantityRaw": "2 كيس g+100g500"
+    },
+    {
+      "source": "master",
+      "excelRow": 87,
+      "name": "فلفل اسود",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 85,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيس g200"
+    },
+    {
+      "source": "master",
+      "excelRow": 88,
+      "name": "قرنفل",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 86,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيس g200"
+    },
+    {
+      "source": "master",
+      "excelRow": 89,
+      "name": "جوزة الطيب",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 87,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيس g200"
+    },
+    {
+      "source": "master",
+      "excelRow": 90,
+      "name": "اوريغانو",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 88,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيس g200"
+    },
+    {
+      "source": "master",
+      "excelRow": 91,
+      "name": "قرفة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 89,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيس g200"
+    },
+    {
+      "source": "master",
+      "excelRow": 92,
+      "name": "حلبة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 90,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيس g200"
+    },
+    {
+      "source": "master",
+      "excelRow": 93,
+      "name": "فلفل ابيض",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 91,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيس G600"
+    },
+    {
+      "source": "master",
+      "excelRow": 94,
+      "name": "زنجبيل",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 92,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيس g400"
+    },
+    {
+      "source": "master",
+      "excelRow": 95,
+      "name": "كمون",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 93,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 1,
+      "quantityRaw": "1 كيس g100"
+    },
+    {
+      "source": "master",
+      "excelRow": 96,
+      "name": "توم بودرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 94,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 1,
+      "quantityRaw": "1 كيس g500"
+    },
+    {
+      "source": "master",
+      "excelRow": 97,
+      "name": "بصل بودرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 95,
+      "openingClass": "SAFE_NUMERIC_EXTRACTION",
+      "quantityNumeric": 1,
+      "quantityRaw": "1 كيلو"
+    },
+    {
+      "source": "master",
+      "excelRow": 98,
+      "name": "بابريكا",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 96,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيس g200"
+    },
+    {
+      "source": "master",
+      "excelRow": 99,
+      "name": "بهارات مندي",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 97,
+      "openingClass": "SAFE_NUMERIC_EXTRACTION",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيلو"
+    },
+    {
+      "source": "master",
+      "excelRow": 100,
+      "name": "طحينة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 98,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 1,
+      "quantityRaw": "1 كيس g400"
+    },
+    {
+      "source": "master",
+      "excelRow": 101,
+      "name": "كاري",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 99,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 102,
+      "name": "فلفل احمر",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 100,
+      "openingClass": "COMPOSITE_OR_AMBIGUOUS",
+      "quantityNumeric": null,
+      "quantityRaw": "g500 علبة"
+    },
+    {
+      "source": "master",
+      "excelRow": 103,
+      "name": "خميرة فورية",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 101,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 ظروف"
+    },
+    {
+      "source": "master",
+      "excelRow": 104,
+      "name": "خميرة فورية",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 102,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 105,
+      "name": "صحن سلطة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 103,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيس"
+    },
+    {
+      "source": "master",
+      "excelRow": 106,
+      "name": "أكياس صغيرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 104,
+      "openingClass": "SAFE_NUMERIC_EXTRACTION",
+      "quantityNumeric": 10,
+      "quantityRaw": "10 ربطات"
+    },
+    {
+      "source": "master",
+      "excelRow": 107,
+      "name": "محارم تواليت",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 105,
+      "openingClass": "COMPOSITE_OR_AMBIGUOUS",
+      "quantityNumeric": null,
+      "quantityRaw": "30رول   3أكياس كبيرة"
+    },
+    {
+      "source": "master",
+      "excelRow": 108,
+      "name": "ليف",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 106,
+      "openingClass": "SAFE_NUMERIC_EXTRACTION",
+      "quantityNumeric": 1,
+      "quantityRaw": "1 طرد 88 قطعة"
+    },
+    {
+      "source": "master",
+      "excelRow": 109,
+      "name": "سيف",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 107,
+      "openingClass": "COMPOSITE_OR_AMBIGUOUS",
+      "quantityNumeric": null,
+      "quantityRaw": "1 طرد قطعة95 + اربع قطع كبيرة"
+    },
+    {
+      "source": "master",
+      "excelRow": 110,
+      "name": "ربطة كفوف بيض",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 108,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 1,
+      "quantityRaw": "1 علبة"
+    },
+    {
+      "source": "master",
+      "excelRow": 111,
+      "name": "شوك بالستيك",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 109,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 4,
+      "quantityRaw": "4 اكياس"
+    },
+    {
+      "source": "master",
+      "excelRow": 112,
+      "name": "أكياس كبيرة",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 110,
+      "openingClass": "SAFE_NUMERIC_EXTRACTION",
+      "quantityNumeric": 18,
+      "quantityRaw": "18 ربطة"
+    },
+    {
+      "source": "master",
+      "excelRow": 113,
+      "name": "ملمع زجاج",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 111,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 1,
+      "quantityRaw": "1 علبة"
+    },
+    {
+      "source": "master",
+      "excelRow": 114,
+      "name": "ديتول",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 112,
+      "openingClass": "COUNT_WITH_PACKAGE",
+      "quantityNumeric": 1,
+      "quantityRaw": "1 علبة"
+    },
+    {
+      "source": "master",
+      "excelRow": 115,
+      "name": "لودلين",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 113,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "master",
+      "excelRow": 116,
+      "name": "معطر",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 114,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 117,
+      "name": "كلور",
+      "sourceType": "ORIGINAL_INVENTORY",
+      "itemId": 115,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "master",
+      "excelRow": 120,
+      "name": "زيت نخيل",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 116,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 121,
+      "name": "مستكة",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 117,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 122,
+      "name": "زيت دوار الشمس",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 118,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 123,
+      "name": "حليب بودرة",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 119,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 124,
+      "name": "سوسيرات",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 120,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 125,
+      "name": "فانيليا",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 121,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 126,
+      "name": "دجاج",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 122,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 127,
+      "name": "صدر بجلدة",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 123,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 128,
+      "name": "جزر",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 124,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 129,
+      "name": "ليمون",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 125,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 130,
+      "name": "برتقال",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 126,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 131,
+      "name": "ملفوف",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 127,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 132,
+      "name": "ثوم",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 128,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 133,
+      "name": "دبس فليفة",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 129,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 134,
+      "name": "موزاريلا",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 130,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 135,
+      "name": "بندورة",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 131,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 136,
+      "name": "مماسمح ارض",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 132,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 137,
+      "name": "عصاية تنظيف طويلة",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 133,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 138,
+      "name": "مقشة ارض",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 134,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 139,
+      "name": "سلم",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 135,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 140,
+      "name": "علاقة حديد",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 136,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 141,
+      "name": "مكيف صغير للمستودع",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 137,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 142,
+      "name": "ليمون",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 138,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 143,
+      "name": "أرز مندي",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 139,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "master",
+      "excelRow": 144,
+      "name": "صحون بلاستيك و معالق",
+      "sourceType": "MOVEMENT_ADDED",
+      "itemId": 140,
+      "openingClass": "STRICT_NUMERIC",
+      "quantityNumeric": 0,
+      "quantityRaw": "0"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 3,
+      "name": "زيت نخيل",
+      "itemId": 116,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 4,
+      "name": "مستكة",
+      "itemId": 117,
+      "createdUnmapped": false,
+      "quantityNumeric": 2,
+      "quantityRaw": "2 علبة"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 5,
+      "name": "زيت دوار الشمس",
+      "itemId": 118,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 6,
+      "name": "حليب بودرة",
+      "itemId": 119,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1 علبة"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 7,
+      "name": "سوسيرات",
+      "itemId": 120,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "1ربطة صغيرة 1ربطة كبيرة"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 8,
+      "name": "فانيليا",
+      "itemId": 121,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 9,
+      "name": "طحين",
+      "itemId": 62,
+      "createdUnmapped": false,
+      "quantityNumeric": 4,
+      "quantityRaw": "4"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 10,
+      "name": "دجاج",
+      "itemId": 122,
+      "createdUnmapped": false,
+      "quantityNumeric": 2,
+      "quantityRaw": "2 فروج"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 11,
+      "name": "صدر بجلدة",
+      "itemId": 123,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 12,
+      "name": "جزر",
+      "itemId": 124,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 13,
+      "name": "ليمون",
+      "itemId": 125,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 14,
+      "name": "برتقال",
+      "itemId": 126,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 15,
+      "name": "ملفوف",
+      "itemId": 127,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 16,
+      "name": "ثوم",
+      "itemId": 128,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 17,
+      "name": "دبس فليفة",
+      "itemId": 129,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 18,
+      "name": "موزاريلا",
+      "itemId": 130,
+      "createdUnmapped": false,
+      "quantityNumeric": 2,
+      "quantityRaw": "2 قالب"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 19,
+      "name": "بندورة",
+      "itemId": 131,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 20,
+      "name": "بصل بودرة",
+      "itemId": 95,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 21,
+      "name": "مماسمح ارض",
+      "itemId": 132,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 22,
+      "name": "عصاية تنظيف طويلة",
+      "itemId": 133,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 23,
+      "name": "مقشة ارض",
+      "itemId": 134,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 24,
+      "name": "سلم",
+      "itemId": 135,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 25,
+      "name": "علاقة حديد",
+      "itemId": 136,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 26,
+      "name": "مكيف صغير للمستودع",
+      "itemId": 137,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 27,
+      "name": "فانيليا",
+      "itemId": 121,
+      "createdUnmapped": false,
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 28,
+      "name": "زيت نخيل",
+      "itemId": 116,
+      "createdUnmapped": false,
+      "quantityNumeric": 36,
+      "quantityRaw": "36"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 29,
+      "name": "طحين",
+      "itemId": 62,
+      "createdUnmapped": false,
+      "quantityNumeric": 15,
+      "quantityRaw": "15"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 30,
+      "name": "منظف ارضيات",
+      "itemId": 141,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 31,
+      "name": "كيس شاي",
+      "itemId": 142,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 32,
+      "name": "نسكافيه",
+      "itemId": 143,
+      "createdUnmapped": true,
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 33,
+      "name": "هوت شوكلت",
+      "itemId": 144,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 34,
+      "name": "مسحوق غسيل ثياب",
+      "itemId": 145,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 35,
+      "name": "نسكفيه سائل",
+      "itemId": 146,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 36,
+      "name": "شاي اخضر",
+      "itemId": 147,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 37,
+      "name": "كبتشينو",
+      "itemId": 148,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 38,
+      "name": "قهوة",
+      "itemId": 149,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 39,
+      "name": "بطاطا مثلجة",
+      "itemId": 150,
+      "createdUnmapped": true,
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 40,
+      "name": "ميلو",
+      "itemId": 151,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 41,
+      "name": "كولجان",
+      "itemId": 152,
+      "createdUnmapped": true,
+      "quantityNumeric": 5,
+      "quantityRaw": "5"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 42,
+      "name": "كاسات ورق مطبوعة (800ml)",
+      "itemId": 153,
+      "createdUnmapped": true,
+      "quantityNumeric": 2000,
+      "quantityRaw": "2000"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 43,
+      "name": "أغطية ماسات",
+      "itemId": 154,
+      "createdUnmapped": true,
+      "quantityNumeric": 2000,
+      "quantityRaw": "2000"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 44,
+      "name": "اكواب بلاستيك (700ml)",
+      "itemId": 155,
+      "createdUnmapped": true,
+      "quantityNumeric": 2000,
+      "quantityRaw": "2000"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 45,
+      "name": "اغطية اكواب",
+      "itemId": 156,
+      "createdUnmapped": true,
+      "quantityNumeric": 2000,
+      "quantityRaw": "2000"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 46,
+      "name": "زيت عبوات",
+      "itemId": 157,
+      "createdUnmapped": true,
+      "quantityNumeric": 8,
+      "quantityRaw": "8"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 47,
+      "name": "زيت زيتون",
+      "itemId": 158,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 48,
+      "name": "صوص hp",
+      "itemId": 159,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 49,
+      "name": "صوص صويا مالح",
+      "itemId": 160,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 50,
+      "name": "صوص صويا حلوة abc",
+      "itemId": 161,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 51,
+      "name": "صوص صويا حلوة ةشىهس",
+      "itemId": 162,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 52,
+      "name": "صوص حار اندوفود",
+      "itemId": 163,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 53,
+      "name": "صوص حار abc",
+      "itemId": 164,
+      "createdUnmapped": true,
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 54,
+      "name": "محارم مطبخ رول",
+      "itemId": 165,
+      "createdUnmapped": true,
+      "quantityNumeric": 5,
+      "quantityRaw": "5"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 55,
+      "name": "محارم مطبخ عادية",
+      "itemId": 166,
+      "createdUnmapped": true,
+      "quantityNumeric": 5,
+      "quantityRaw": "5"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 56,
+      "name": "رول تواليت",
+      "itemId": 167,
+      "createdUnmapped": true,
+      "quantityNumeric": 2,
+      "quantityRaw": "2"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 57,
+      "name": "محارم يد",
+      "itemId": 168,
+      "createdUnmapped": true,
+      "quantityNumeric": 3,
+      "quantityRaw": "3"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 58,
+      "name": "سائل جلي أكياس",
+      "itemId": 169,
+      "createdUnmapped": true,
+      "quantityNumeric": 12,
+      "quantityRaw": "12"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 59,
+      "name": "معطر ارضيات أكياس",
+      "itemId": 170,
+      "createdUnmapped": true,
+      "quantityNumeric": 6,
+      "quantityRaw": "6"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 60,
+      "name": "علبة معطر ارضيات",
+      "itemId": 171,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 61,
+      "name": "كلور",
+      "itemId": 115,
+      "createdUnmapped": false,
+      "quantityNumeric": 4,
+      "quantityRaw": "4"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 62,
+      "name": "صواني صغار",
+      "itemId": 172,
+      "createdUnmapped": true,
+      "quantityNumeric": 40,
+      "quantityRaw": "40"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 63,
+      "name": "صواني كبار",
+      "itemId": 173,
+      "createdUnmapped": true,
+      "quantityNumeric": 5,
+      "quantityRaw": "5"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 64,
+      "name": "صحون قزاز بيض",
+      "itemId": 174,
+      "createdUnmapped": true,
+      "quantityNumeric": 12,
+      "quantityRaw": "12"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 65,
+      "name": "لحمة ناعمة",
+      "itemId": 175,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 66,
+      "name": "صدر دجاج",
+      "itemId": 176,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 67,
+      "name": "دلو تتنظيف",
+      "itemId": 177,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "inbound",
+      "excelRow": 68,
+      "name": "صابون ايدي",
+      "itemId": 178,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1"
+    },
+    {
+      "source": "outbound",
+      "excelRow": 3,
+      "name": "زيت نخيل",
+      "itemId": 116,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 4,
+      "name": "زيت دوار الشمس",
+      "itemId": 118,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 5,
+      "name": "نشاء",
+      "itemId": 78,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 6,
+      "name": "قرفة",
+      "itemId": 89,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 7,
+      "name": "حلبة",
+      "itemId": 90,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 8,
+      "name": "اكليل الجبل",
+      "itemId": 75,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "ا علبة",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 9,
+      "name": "كاري",
+      "itemId": 99,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 10,
+      "name": "ملح صيني",
+      "itemId": 73,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1 كيس",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 11,
+      "name": "جوزة الطيب",
+      "itemId": 87,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 12,
+      "name": "هيل حب",
+      "itemId": 82,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 13,
+      "name": "قرنفل",
+      "itemId": 86,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 14,
+      "name": "زنجبيل",
+      "itemId": 92,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 15,
+      "name": "كزبرة",
+      "itemId": 84,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 16,
+      "name": "كولجين",
+      "itemId": 72,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "كيس 1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 17,
+      "name": "كراويا",
+      "itemId": 74,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1 كيس",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 18,
+      "name": "فانيليا",
+      "itemId": 121,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 19,
+      "name": "حليب بودرة",
+      "itemId": 119,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1 علبة",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 20,
+      "name": "فانيليا",
+      "itemId": 121,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 21,
+      "name": "طحين",
+      "itemId": 62,
+      "createdUnmapped": false,
+      "quantityNumeric": 2,
+      "quantityRaw": "2",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 22,
+      "name": "دجاج",
+      "itemId": 122,
+      "createdUnmapped": false,
+      "quantityNumeric": 2,
+      "quantityRaw": "2 فروج",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 23,
+      "name": "صدر بجلدة",
+      "itemId": 123,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 24,
+      "name": "دبس بندورة",
+      "itemId": 71,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 25,
+      "name": "جزر",
+      "itemId": 124,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 26,
+      "name": "ة ليمون",
+      "itemId": 179,
+      "createdUnmapped": true,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 27,
+      "name": "برتقال",
+      "itemId": 126,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 28,
+      "name": "ملفوف",
+      "itemId": 127,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 29,
+      "name": "ثوم",
+      "itemId": 128,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 30,
+      "name": "دبس فليفة",
+      "itemId": 129,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 31,
+      "name": "موزاريلا",
+      "itemId": 130,
+      "createdUnmapped": false,
+      "quantityNumeric": 2,
+      "quantityRaw": "2 قالب",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 32,
+      "name": "بندورة",
+      "itemId": 131,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 33,
+      "name": "بصل بودرة",
+      "itemId": 95,
+      "createdUnmapped": false,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 34,
+      "name": "أرز مندي",
+      "itemId": 139,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1 كيس",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 35,
+      "name": "صحون بلاستيك و معالق",
+      "itemId": 140,
+      "createdUnmapped": false,
+      "quantityNumeric": 2,
+      "quantityRaw": "2 كيس",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 36,
+      "name": "بخاخة ماء",
+      "itemId": 41,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 37,
+      "name": "طحين",
+      "itemId": 62,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 38,
+      "name": "مسحوق غسيل",
+      "itemId": 180,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 39,
+      "name": "نسكفيه سائل",
+      "itemId": 146,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 40,
+      "name": "شاي اخضر",
+      "itemId": 147,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 41,
+      "name": "قهوة",
+      "itemId": 149,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 42,
+      "name": "ميلو",
+      "itemId": 151,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 43,
+      "name": "نسكفيه",
+      "itemId": 181,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 44,
+      "name": "براشة كبيرة",
+      "itemId": 35,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 45,
+      "name": "سكوار صغير",
+      "itemId": 182,
+      "createdUnmapped": true,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 46,
+      "name": "سكوار كبير",
+      "itemId": 183,
+      "createdUnmapped": true,
+      "quantityNumeric": null,
+      "quantityRaw": "(فارغ في Excel)",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 47,
+      "name": "مصافي",
+      "itemId": 184,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 48,
+      "name": "طحين",
+      "itemId": 62,
+      "createdUnmapped": false,
+      "quantityNumeric": 7,
+      "quantityRaw": "7",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 49,
+      "name": "ملح",
+      "itemId": 185,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 50,
+      "name": "مصفاية جاط كبير",
+      "itemId": 59,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 51,
+      "name": "نشاء",
+      "itemId": 78,
+      "createdUnmapped": false,
+      "quantityNumeric": 7,
+      "quantityRaw": "7",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 52,
+      "name": "معلقة نشاء كبيرة",
+      "itemId": 186,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 53,
+      "name": "زيت",
+      "itemId": 187,
+      "createdUnmapped": true,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 54,
+      "name": "خس",
+      "itemId": 188,
+      "createdUnmapped": true,
+      "quantityNumeric": 2,
+      "quantityRaw": "2",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 55,
+      "name": "بطاطا مفرزة",
+      "itemId": 189,
+      "createdUnmapped": true,
+      "quantityNumeric": 4,
+      "quantityRaw": "4",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 56,
+      "name": "برتقال",
+      "itemId": 126,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 57,
+      "name": "زيت زيتون",
+      "itemId": 158,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 58,
+      "name": "محارم يد",
+      "itemId": 168,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 60,
+      "name": "صواني صغار",
+      "itemId": 172,
+      "createdUnmapped": false,
+      "quantityNumeric": 40,
+      "quantityRaw": "40",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 61,
+      "name": "صواني كبار",
+      "itemId": 173,
+      "createdUnmapped": false,
+      "quantityNumeric": 5,
+      "quantityRaw": "5",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 62,
+      "name": "صحون قزاز بيض",
+      "itemId": 174,
+      "createdUnmapped": false,
+      "quantityNumeric": 12,
+      "quantityRaw": "12",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 63,
+      "name": "طحين",
+      "itemId": 62,
+      "createdUnmapped": false,
+      "quantityNumeric": 6,
+      "quantityRaw": "6",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 64,
+      "name": "لحمة ناعمة",
+      "itemId": 175,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 65,
+      "name": "صدر دجاج",
+      "itemId": 176,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 67,
+      "name": "دلو تتنظيف",
+      "itemId": 177,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 68,
+      "name": "صابون ايدي",
+      "itemId": 178,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    },
+    {
+      "source": "outbound",
+      "excelRow": 69,
+      "name": "لودلين",
+      "itemId": 113,
+      "createdUnmapped": false,
+      "quantityNumeric": 1,
+      "quantityRaw": "1",
+      "stockUnsafe": true
+    }
+  ],
+  "warnings": [
+    "IN row 13: exact name \"ليمون\" matches multiple master items; attached to first id=125"
+  ],
+  "final": {
+    "masterRowsImported": 140,
+    "movementCreatedItems": 49,
+    "totalV3InventoryItems": 189,
+    "openingMovements": 140,
+    "warehouseIn": 66,
+    "warehouseToKitchen": 65,
+    "itemsNumericVerifiedCurrent": 172,
+    "itemsRequiringQuantityReview": 14,
+    "exactDuplicatesPreservedGroups": 3,
+    "unmappedNamesPreserved": 49,
+    "sourceRowsDropped": 0,
+    "duplicateMovementImports": 0,
+    "reconciliationMismatches": [],
+    "negativeNumericWarehouseBalances": [
+      {
+        "id": 139,
+        "name": "أرز مندي",
+        "qty": -1
+      },
+      {
+        "id": 140,
+        "name": "صحون بلاستيك و معالق",
+        "qty": -2
+      },
+      {
+        "id": 126,
+        "name": "برتقال",
+        "qty": -1
+      },
+      {
+        "id": 180,
+        "name": "مسحوق غسيل",
+        "qty": -1
+      },
+      {
+        "id": 181,
+        "name": "نسكفيه",
+        "qty": -1
+      },
+      {
+        "id": 186,
+        "name": "معلقة نشاء كبيرة",
+        "qty": -1
+      },
+      {
+        "id": 187,
+        "name": "زيت",
+        "qty": -1
+      },
+      {
+        "id": 188,
+        "name": "خس",
+        "qty": -2
+      },
+      {
+        "id": 189,
+        "name": "بطاطا مفرزة",
+        "qty": -4
+      },
+      {
+        "id": 184,
+        "name": "مصافي",
+        "qty": -1
+      },
+      {
+        "id": 185,
+        "name": "ملح",
+        "qty": -1
+      }
+    ],
+    "testQaRecordsInProd": 0
+  },
+  "expected": {
+    "master": 140,
+    "inbound": 66,
+    "outbound": 65
+  }
+}

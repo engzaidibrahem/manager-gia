@@ -32,6 +32,7 @@ function AppRouter({ user, onLogout }: { user: AuthUser; onLogout: () => void })
         <Switch>
           <Route path="/" component={() => <V3SummaryPage lang={lang} />} />
           <Route path="/warehouse" component={() => <V3WarehousePage lang={lang} />} />
+          <Route path="/inventory" component={() => <V3WarehousePage lang={lang} />} />
           <Route path="/opening" component={() => <V3OpeningPage lang={lang} />} />
           <Route path="/warehouse-in" component={() => <V3WarehouseInPage lang={lang} />} />
           <Route path="/warehouse-out" component={() => <V3WarehouseOutPage lang={lang} />} />

@@ -66,31 +66,51 @@ export async function recomputeItemBalances(tx: DbTx | typeof db, itemId: number
   let inn = 0;
   let out = 0;
   let adj = 0;
-  let hasAnyNumeric = false;
+  let hasNullOpening = false;
+  let hasNumericOpening = false;
+  let hasNumericInOutAdj = false;
 
   for (const r of rows) {
+    if (r.movementType === "OPENING") {
+      if (r.quantityNumeric == null) {
+        hasNullOpening = true;
+      } else {
+        hasNumericOpening = true;
+        opening += Number(r.quantityNumeric);
+      }
+      continue;
+    }
     if (r.quantityNumeric == null) continue;
-    hasAnyNumeric = true;
+    hasNumericInOutAdj = true;
     const q = Number(r.quantityNumeric);
-    if (r.movementType === "OPENING") opening += q;
-    else if (r.movementType === "WAREHOUSE_IN") inn += q;
+    if (r.movementType === "WAREHOUSE_IN") inn += q;
     else if (r.movementType === "WAREHOUSE_TO_KITCHEN") out += q;
     else if (r.movementType === "ADJUSTMENT") adj += q;
   }
 
-  const warehouse = hasAnyNumeric ? opening + inn - out + adj : null;
-  const kitchen = hasAnyNumeric ? out : null;
+  /** Never invent warehouse balance when opening is non-numeric (would fake negatives). */
+  let warehouse: number | null = null;
+  if (hasNullOpening) {
+    warehouse = null;
+  } else if (hasNumericOpening || hasNumericInOutAdj) {
+    warehouse = opening + inn - out + adj;
+  }
+
+  const kitchen = out;
+
+  const needsQuantityReview = hasNullOpening;
 
   await tx
     .update(v3InventoryItemsTable)
     .set({
       warehouseQtyNumeric: warehouse,
       kitchenQtyNumeric: kitchen,
+      needsQuantityReview,
       updatedAt: new Date(),
     })
     .where(eq(v3InventoryItemsTable.id, itemId));
 
-  return { warehouseQtyNumeric: warehouse, kitchenQtyNumeric: kitchen };
+  return { warehouseQtyNumeric: warehouse, kitchenQtyNumeric: kitchen, needsQuantityReview };
 }
 
 async function findByClientRequest(tx: DbTx | typeof db, clientRequestId?: string) {
@@ -118,6 +138,7 @@ export async function createItem(input: {
       warehouseQtyNumeric: 0,
       kitchenQtyNumeric: 0,
       qrToken: newQrToken(),
+      sourceType: "MANUAL",
     })
     .returning();
   return row;
@@ -195,8 +216,14 @@ export async function listWarehouseSummary(opts: {
   let rows = all.map((item) => {
     const t = totMap.get(item.id) || { opening: 0, totalIn: 0, totalOut: 0 };
     const op = openingRaw.get(item.id);
-    const current = item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric);
-    const status = stockStatus(current, item.minimumStock == null ? null : Number(item.minimumStock));
+    const needsQuantityReview = Boolean(item.needsQuantityReview);
+    const needsReview = Boolean(item.needsReview) || needsQuantityReview;
+    const current = needsQuantityReview || item.warehouseQtyNumeric == null
+      ? null
+      : Number(item.warehouseQtyNumeric);
+    const status = needsQuantityReview
+      ? ("unknown" as const)
+      : stockStatus(current, item.minimumStock == null ? null : Number(item.minimumStock));
     return {
       id: item.id,
       name: item.name,
@@ -212,6 +239,11 @@ export async function listWarehouseSummary(opts: {
       status,
       kitchenQty: item.kitchenQtyNumeric == null ? null : Number(item.kitchenQtyNumeric),
       qrToken: item.qrToken,
+      sourceType: item.sourceType,
+      sourceExcelRow: item.sourceExcelRow,
+      originalNameRaw: item.originalNameRaw,
+      needsQuantityReview,
+      needsReview,
     };
   });
 
@@ -261,6 +293,7 @@ export async function postOpeningBalance(input: {
           warehouseQtyNumeric: 0,
           kitchenQtyNumeric: 0,
           qrToken: newQrToken(),
+          sourceType: "MANUAL",
         })
         .returning();
       itemId = created.id;
@@ -279,8 +312,8 @@ export async function postOpeningBalance(input: {
       input.quantityNumeric === undefined
         ? parseStrictNumeric(qtyRaw)
         : input.quantityNumeric;
-    if (qtyNum != null && !(qtyNum > 0)) {
-      throw new AppError("VALIDATION_ERROR", "الكمية الرقمية يجب أن تكون أكبر من صفر");
+    if (qtyNum != null && qtyNum < 0) {
+      throw new AppError("VALIDATION_ERROR", "الكمية الرقمية لا تكون سالبة");
     }
 
     const [opening] = await tx
@@ -357,6 +390,10 @@ export async function postWarehouseToKitchen(input: {
   userId?: number | null;
   clientRequestId?: string;
   batchKey?: string;
+  allowHistoricalImport?: boolean;
+  needsReview?: boolean;
+  sourceExcelRow?: number | null;
+  originalNameRaw?: string | null;
 }) {
   return postMovement("WAREHOUSE_TO_KITCHEN", input);
 }
@@ -377,6 +414,11 @@ async function postMovement(
     purchaseId?: number | null;
     clientRequestId?: string;
     batchKey?: string;
+    /** Historical import: allow OUT when available is unknown / insufficient. */
+    allowHistoricalImport?: boolean;
+    needsReview?: boolean;
+    sourceExcelRow?: number | null;
+    originalNameRaw?: string | null;
   },
 ) {
   const run = async (tx: DbTx) => {
@@ -395,26 +437,32 @@ async function postMovement(
         ? parseStrictNumeric(qtyRaw)
         : input.quantityNumeric;
 
+    let needsReview = Boolean(input.needsReview);
+
     if (movementType === "WAREHOUSE_TO_KITCHEN" && qtyNum != null) {
       if (!(qtyNum > 0)) throw new AppError("VALIDATION_ERROR", "الكمية يجب أن تكون أكبر من صفر");
       const available = item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric);
-      if (available == null) {
-        throw new AppError(
-          "VALIDATION_ERROR",
-          "لا يمكن التحقق من الرصيد رقمياً لهذه المادة — حدّد كمية رقمية للافتتاح/الإدخال أولاً",
-        );
-      }
-      if (qtyNum > available + 1e-9) {
-        throw new AppError(
-          "INSUFFICIENT_STOCK",
-          "الكمية المطلوبة أكبر من الكمية الموجودة في المستودع.",
-          400,
-          { available, requested: qtyNum },
-        );
+      if (!input.allowHistoricalImport) {
+        if (available == null) {
+          throw new AppError(
+            "VALIDATION_ERROR",
+            "لا يمكن التحقق من الرصيد رقمياً لهذه المادة — حدّد كمية رقمية للافتتاح/الإدخال أولاً",
+          );
+        }
+        if (qtyNum > available + 1e-9) {
+          throw new AppError(
+            "INSUFFICIENT_STOCK",
+            "الكمية المطلوبة أكبر من الكمية الموجودة في المستودع.",
+            400,
+            { available, requested: qtyNum },
+          );
+        }
+      } else if (available == null || qtyNum > available + 1e-9) {
+        needsReview = true;
       }
     }
 
-    if ((movementType === "WAREHOUSE_IN" || movementType === "ADJUSTMENT") && qtyNum != null && !(qtyNum > 0) && movementType === "WAREHOUSE_IN") {
+    if (movementType === "WAREHOUSE_IN" && qtyNum != null && !(qtyNum > 0)) {
       throw new AppError("VALIDATION_ERROR", "الكمية يجب أن تكون أكبر من صفر");
     }
 
@@ -435,8 +483,18 @@ async function postMovement(
         notes: input.notes || null,
         batchKey: input.batchKey || null,
         clientRequestId: input.clientRequestId?.trim() || null,
+        needsReview,
+        sourceExcelRow: input.sourceExcelRow ?? null,
+        originalNameRaw: input.originalNameRaw ?? null,
       })
       .returning();
+
+    if (needsReview) {
+      await tx
+        .update(v3InventoryItemsTable)
+        .set({ needsReview: true, updatedAt: new Date() })
+        .where(eq(v3InventoryItemsTable.id, item.id));
+    }
 
     const balances = await recomputeItemBalances(tx, item.id);
     const updated = await tx.query.v3InventoryItemsTable.findFirst({

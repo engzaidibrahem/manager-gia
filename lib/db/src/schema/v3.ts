@@ -15,6 +15,15 @@ import {
  * Source of truth = movements. Cached balances updated transactionally.
  */
 
+export const V3_SOURCE_TYPES = [
+  "ORIGINAL_INVENTORY",
+  "MOVEMENT_ADDED",
+  "MOVEMENT_CREATED_UNMAPPED",
+  "MANUAL",
+] as const;
+
+export type V3SourceType = (typeof V3_SOURCE_TYPES)[number];
+
 export const v3InventoryItemsTable = pgTable("v3_inventory_items", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -23,10 +32,17 @@ export const v3InventoryItemsTable = pgTable("v3_inventory_items", {
   /** NULL = no low-stock warning */
   minimumStock: numeric("minimum_stock", { precision: 14, scale: 4, mode: "number" }),
   isActive: boolean("is_active").notNull().default(true),
-  /** Cached numeric warehouse balance; NULL means unknown (only raw texts). */
+  /** Cached numeric warehouse balance; NULL = unknown / needs review (never fake 0). */
   warehouseQtyNumeric: numeric("warehouse_qty_numeric", { precision: 14, scale: 4, mode: "number" }),
   kitchenQtyNumeric: numeric("kitchen_qty_numeric", { precision: 14, scale: 4, mode: "number" }),
   qrToken: text("qr_token").notNull().default(""),
+  /** ORIGINAL_INVENTORY | MOVEMENT_ADDED | MOVEMENT_CREATED_UNMAPPED | MANUAL */
+  sourceType: text("source_type").notNull().default("MANUAL"),
+  sourceExcelRow: integer("source_excel_row"),
+  originalNameRaw: text("original_name_raw"),
+  needsQuantityReview: boolean("needs_quantity_review").notNull().default(false),
+  needsReview: boolean("needs_review").notNull().default(false),
+  importBatchKey: text("import_batch_key"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [
@@ -46,6 +62,8 @@ export const v3OpeningBalancesTable = pgTable("v3_opening_balances", {
   userId: integer("user_id"),
   batchKey: text("batch_key"),
   movementId: integer("movement_id"),
+  sourceExcelRow: integer("source_excel_row"),
+  needsQuantityReview: boolean("needs_quantity_review").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -66,6 +84,9 @@ export const v3WarehouseMovementsTable = pgTable("v3_warehouse_movements", {
   openingBalanceId: integer("opening_balance_id"),
   notes: text("notes"),
   batchKey: text("batch_key"),
+  sourceExcelRow: integer("source_excel_row"),
+  originalNameRaw: text("original_name_raw"),
+  needsReview: boolean("needs_review").notNull().default(false),
   /** active | voided */
   status: text("status").notNull().default("active"),
   voidedAt: timestamp("voided_at", { withTimezone: true }),

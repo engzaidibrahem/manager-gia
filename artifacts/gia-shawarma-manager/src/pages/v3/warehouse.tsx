@@ -1,14 +1,9 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FormField, NumberInput, PageHint, PrimaryButton, SecondaryButton, SelectInput, TextInput } from "@/components/FormKit";
+import { PageHint, SecondaryButton, SelectInput, TextInput } from "@/components/FormKit";
 import { Flash, PageTitle } from "@/components/layout";
 import { listV3Warehouse, statusLabel, type V3WarehouseRow } from "@/lib/v3-api";
 import { type Lang } from "@/lib/i18n";
-
-function formatQty(n: number | null, rawFallback?: string) {
-  if (n == null) return rawFallback || "—";
-  return String(n);
-}
 
 export function V3WarehousePage({ lang }: { lang: Lang }) {
   const [q, setQ] = useState("");
@@ -27,7 +22,11 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
   const pageSize = query.data?.pageSize ?? 50;
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
-  const statusText = useMemo(() => (s: V3WarehouseRow["status"]) => statusLabel(s, lang === "id" ? "id" : "ar"), [lang]);
+  const statusText = useMemo(
+    () => (s: V3WarehouseRow["status"], needsReview?: boolean) =>
+      statusLabel(s, lang === "id" ? "id" : "ar", needsReview),
+    [lang],
+  );
 
   return (
     <div className="fade-up">
@@ -40,8 +39,8 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
       />
       <PageHint>
         {lang === "id"
-          ? "Saldo dihitung dari: Opening + Masuk − Keluar dapur. Angka tidak diedit manual."
-          : "الرصيد = رصيد الافتتاح + الداخل − الخارج للمطبخ. لا يُعدَّل الرصيد يدوياً."}
+          ? "Saldo = Opening + Masuk − Keluar dapur. Angka tidak diedit manual. Item stok 0 tetap tampil."
+          : "الرصيد = رصيد الافتتاح + الداخل − الخارج للمطبخ. لا يُعدَّل يدوياً. الصنف يبقى ظاهراً حتى لو الرصيد 0."}
       </PageHint>
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -60,12 +59,12 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
           <option value="available">{lang === "id" ? "Tersedia" : "متوفر"}</option>
           <option value="low">{lang === "id" ? "Rendah" : "منخفض"}</option>
           <option value="out">{lang === "id" ? "Habis" : "نفد"}</option>
-          <option value="unknown">{lang === "id" ? "Belum angka" : "غير رقمي"}</option>
+          <option value="unknown">{lang === "id" ? "Perlu review" : "بحاجة مراجعة"}</option>
         </SelectInput>
       </div>
 
       <div className="panel soft-shadow overflow-auto">
-        <table className="w-full min-w-[960px] border-collapse text-sm" dir={lang === "ar" ? "rtl" : "ltr"}>
+        <table className="w-full min-w-[1080px] border-collapse text-sm" dir={lang === "ar" ? "rtl" : "ltr"}>
           <thead className="bg-[hsl(var(--muted))] text-[11px] font-bold text-[hsl(var(--muted-foreground))]">
             <tr>
               <th className="px-3 py-3 text-start">{lang === "id" ? "Kategori" : "التصنيف"}</th>
@@ -85,15 +84,31 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
             ) : rows.length === 0 ? (
               <tr><td colSpan={9} className="px-3 py-8 text-center text-[hsl(var(--muted-foreground))]">{lang === "id" ? "Belum ada data." : "لا بيانات بعد."}</td></tr>
             ) : rows.map((r) => {
-              const rowClass = r.status === "out"
-                ? "bg-red-50/80"
-                : r.status === "low"
-                  ? "bg-amber-50/70"
-                  : "";
+              const qtyReview = Boolean(r.needsQuantityReview) || r.currentWarehouse == null;
+              const flagged = Boolean(r.needsReview || r.needsQuantityReview);
+              const rowClass = qtyReview
+                ? "bg-amber-50/60"
+                : r.status === "out"
+                  ? "bg-red-50/80"
+                  : r.status === "low"
+                    ? "bg-orange-50/70"
+                    : flagged
+                      ? "bg-amber-50/30"
+                      : "";
               return (
                 <tr key={r.id} className={`border-b border-[hsl(var(--border)/.5)] ${rowClass}`}>
-                  <td className="px-3 py-2.5 text-xs text-[hsl(var(--muted-foreground))]">{r.category || "—"}</td>
-                  <td className="px-3 py-2.5 font-semibold">{r.name}</td>
+                  <td className="px-3 py-2.5 text-xs text-[hsl(var(--muted-foreground))]">
+                    {r.category || "—"}
+                    {r.sourceType === "MOVEMENT_CREATED_UNMAPPED" ? (
+                      <div className="mt-0.5 text-[10px] font-bold text-amber-800">unmapped</div>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2.5 font-semibold">
+                    {r.name}
+                    {r.sourceExcelRow != null ? (
+                      <div className="mt-0.5 text-[10px] font-normal text-[hsl(var(--muted-foreground))]">Excel#{r.sourceExcelRow}</div>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-2.5">{r.baseUnit || r.openingUnitRaw || "—"}</td>
                   <td className="px-3 py-2.5 font-mono text-xs">
                     {r.openingNumeric != null ? r.openingNumeric : r.openingRaw}
@@ -101,10 +116,28 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
                   <td className="px-3 py-2.5 font-mono">{r.totalIn}</td>
                   <td className="px-3 py-2.5 font-mono">{r.totalOut}</td>
                   <td className="px-3 py-2.5 font-mono font-bold">
-                    {formatQty(r.currentWarehouse, statusText(r.status))}
+                    {qtyReview ? (
+                      <div>
+                        <div className="text-amber-900">{lang === "id" ? "Perlu review" : "بحاجة مراجعة"}</div>
+                        {r.openingRaw && r.openingRaw !== "—" ? (
+                          <div className="mt-0.5 text-[10px] font-normal text-[hsl(var(--muted-foreground))]">
+                            {lang === "id" ? "Asli: " : "الأصلي: "}{r.openingRaw}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      r.currentWarehouse
+                    )}
                   </td>
                   <td className="px-3 py-2.5 font-mono">{r.minimumStock ?? "—"}</td>
-                  <td className="px-3 py-2.5 text-xs font-bold">{statusText(r.status)}</td>
+                  <td className="px-3 py-2.5 text-xs font-bold">
+                    {statusText(r.status, qtyReview)}
+                    {flagged && !qtyReview ? (
+                      <div className="mt-0.5 text-[10px] font-bold text-amber-800">
+                        {lang === "id" ? "ditandai review" : "معلّم للمراجعة"}
+                      </div>
+                    ) : null}
+                  </td>
                 </tr>
               );
             })}

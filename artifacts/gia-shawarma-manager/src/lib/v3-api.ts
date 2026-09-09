@@ -27,6 +27,11 @@ export type V3WarehouseRow = {
   minimumStock: number | null;
   status: "available" | "low" | "out" | "unknown";
   kitchenQty: number | null;
+  sourceType?: string;
+  sourceExcelRow?: number | null;
+  originalNameRaw?: string | null;
+  needsQuantityReview?: boolean;
+  needsReview?: boolean;
 };
 
 export function listV3Warehouse(params: Record<string, string | number | undefined>) {
@@ -90,15 +95,18 @@ export function newClientRequestId() {
   return `v3-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
-export function statusLabel(status: V3WarehouseRow["status"], lang: "ar" | "id") {
+export function statusLabel(status: V3WarehouseRow["status"], lang: "ar" | "id", needsReview?: boolean) {
+  if (needsReview || status === "unknown") {
+    return lang === "id" ? "Perlu review" : "بحاجة مراجعة";
+  }
   if (lang === "id") {
     if (status === "out") return "Habis";
     if (status === "low") return "Rendah";
     if (status === "available") return "Tersedia";
-    return "Belum angka";
+    return "Perlu review";
   }
   if (status === "out") return "نفد";
   if (status === "low") return "منخفض";
   if (status === "available") return "متوفر";
-  return "بحاجة تحديد كمية رقمية";
+  return "بحاجة مراجعة";
 }
