@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Route, Switch, Router as WouterRouter } from 'wouter';
+import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Shell } from '@/components/layout';
 import { Toaster } from '@/components/ui/toaster';
@@ -27,6 +27,7 @@ installAuthFetch();
 
 function AppRouter({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('gia-lang') as Lang) || 'ar');
+  const [location] = useLocation();
   const changeLang = (value: Lang) => {
     setLang(value);
     localStorage.setItem('gia-lang', value);
@@ -34,24 +35,25 @@ function AppRouter({ user, onLogout }: { user: AuthUser; onLogout: () => void })
 
   return (
     <Shell lang={lang} setLang={changeLang} user={user} onLogout={onLogout}>
-      <ErrorBoundary resetKey={location.pathname}>
+      {/* Stable route children — avoid `component={() => ...}` which remounts and wipes modal state */}
+      <ErrorBoundary resetKey={location}>
         <Switch>
-          <Route path="/" component={() => <V3SummaryPage lang={lang} />} />
-          <Route path="/warehouse/:id" component={() => <V3ItemDetailPage lang={lang} />} />
-          <Route path="/warehouse" component={() => <V3WarehousePage lang={lang} />} />
-          <Route path="/inventory" component={() => <V3WarehousePage lang={lang} />} />
-          <Route path="/opening" component={() => <V3OpeningPage lang={lang} />} />
-          <Route path="/opening-balance" component={() => <V3OpeningPage lang={lang} />} />
-          <Route path="/warehouse-in" component={() => <V3WarehouseInPage lang={lang} />} />
-          <Route path="/warehouse-out" component={() => <V3WarehouseOutPage lang={lang} />} />
-          <Route path="/warehouse-to-kitchen" component={() => <V3WarehouseOutPage lang={lang} />} />
-          <Route path="/kitchen" component={() => <V3KitchenPage lang={lang} />} />
-          <Route path="/purchases" component={() => <V3PurchasesPage lang={lang} />} />
-          <Route path="/finance" component={() => <V3FinancePage lang={lang} />} />
-          <Route path="/employees/:id" component={() => <V3EmployeeDetailPage lang={lang} />} />
-          <Route path="/employees" component={() => <V3EmployeesPage lang={lang} />} />
-          <Route path="/attendance" component={() => <V3AttendancePage lang={lang} />} />
-          <Route component={NotFound} />
+          <Route path="/"><V3SummaryPage lang={lang} /></Route>
+          <Route path="/warehouse/:id"><V3ItemDetailPage lang={lang} /></Route>
+          <Route path="/warehouse"><V3WarehousePage lang={lang} /></Route>
+          <Route path="/inventory"><V3WarehousePage lang={lang} /></Route>
+          <Route path="/opening"><V3OpeningPage lang={lang} /></Route>
+          <Route path="/opening-balance"><V3OpeningPage lang={lang} /></Route>
+          <Route path="/warehouse-in"><V3WarehouseInPage lang={lang} /></Route>
+          <Route path="/warehouse-out"><V3WarehouseOutPage lang={lang} /></Route>
+          <Route path="/warehouse-to-kitchen"><V3WarehouseOutPage lang={lang} /></Route>
+          <Route path="/kitchen"><V3KitchenPage lang={lang} /></Route>
+          <Route path="/purchases"><V3PurchasesPage lang={lang} /></Route>
+          <Route path="/finance"><V3FinancePage lang={lang} /></Route>
+          <Route path="/employees/:id"><V3EmployeeDetailPage lang={lang} /></Route>
+          <Route path="/employees"><V3EmployeesPage lang={lang} /></Route>
+          <Route path="/attendance"><V3AttendancePage lang={lang} /></Route>
+          <Route><NotFound /></Route>
         </Switch>
       </ErrorBoundary>
     </Shell>

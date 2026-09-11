@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChoiceCard,
@@ -13,11 +13,13 @@ import {
 } from "@/components/FormKit";
 import { Flash, PageTitle } from "@/components/layout";
 import {
+  assertPurchaseCommitted,
   destinationLabel,
   listV3Items,
   listV3PurchasePayments,
   listV3Purchases,
   newClientRequestId,
+  patchV3Purchase,
   paymentStatusLabel,
   postV3Purchase,
   postV3PurchasePayment,
@@ -29,6 +31,89 @@ import { formatIDR } from "@/lib/utils";
 import { type Lang } from "@/lib/i18n";
 
 type Dest = "WAREHOUSE" | "KITCHEN_DIRECT" | "CONSUMABLE" | "";
+type PriceAnchor = "unit" | "total";
+
+type PurchaseFormState = {
+  purchaseDate: string;
+  purchaseTime: string;
+  itemName: string;
+  inventoryItemId: string;
+  useNewItem: boolean;
+  newName: string;
+  newCategory: string;
+  newUnit: string;
+  quantityNumeric: string;
+  unitRaw: string;
+  unitPrice: string;
+  totalAmount: string;
+  paidAmount: string;
+  paymentStatus: "PAID" | "UNPAID" | "PARTIAL";
+  supplier: string;
+  purchasedBy: string;
+  destination: Dest;
+  notes: string;
+};
+
+function emptyForm(): PurchaseFormState {
+  return {
+    purchaseDate: todayISO(),
+    purchaseTime: "",
+    itemName: "",
+    inventoryItemId: "",
+    useNewItem: false,
+    newName: "",
+    newCategory: "",
+    newUnit: "",
+    quantityNumeric: "",
+    unitRaw: "",
+    unitPrice: "",
+    totalAmount: "",
+    paidAmount: "",
+    paymentStatus: "UNPAID",
+    supplier: "",
+    purchasedBy: "",
+    destination: "",
+    notes: "",
+  };
+}
+
+function formFromPurchase(p: V3Purchase): PurchaseFormState {
+  return {
+    purchaseDate: p.purchaseDate,
+    purchaseTime: p.purchaseTime || "",
+    itemName: p.itemName,
+    inventoryItemId: p.inventoryItemId ? String(p.inventoryItemId) : "",
+    useNewItem: false,
+    newName: "",
+    newCategory: "",
+    newUnit: "",
+    quantityNumeric: p.quantityNumeric != null ? String(p.quantityNumeric) : (p.quantityRaw || ""),
+    unitRaw: p.unitRaw || "",
+    unitPrice: String(p.unitPrice ?? ""),
+    totalAmount: String(p.totalAmount ?? ""),
+    paidAmount: String(p.paidAmount ?? ""),
+    paymentStatus: (p.paymentStatus as "PAID" | "UNPAID" | "PARTIAL") || "UNPAID",
+    supplier: p.supplier || "",
+    purchasedBy: p.purchasedBy || "",
+    destination: (p.destination as Dest) || "",
+    notes: p.notes || "",
+  };
+}
+
+function roundMoney(n: number): number {
+  return Math.round(n);
+}
+
+async function invalidatePurchaseViews(qc: ReturnType<typeof useQueryClient>) {
+  await Promise.all([
+    qc.invalidateQueries({ queryKey: ["v3-purchases"] }),
+    qc.invalidateQueries({ queryKey: ["v3-warehouse"] }),
+    qc.invalidateQueries({ queryKey: ["v3-finance"] }),
+    qc.invalidateQueries({ queryKey: ["v3-kitchen"] }),
+    qc.invalidateQueries({ queryKey: ["v3-in-moves"] }),
+    qc.invalidateQueries({ queryKey: ["v3-items-brief"] }),
+  ]);
+}
 
 export function V3PurchasesPage({ lang }: { lang: Lang }) {
   const qc = useQueryClient();
@@ -38,32 +123,13 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
   const [destination, setDestination] = useState("");
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<V3Purchase | null>(null);
   const [payFor, setPayFor] = useState<V3Purchase | null>(null);
   const [detail, setDetail] = useState<V3Purchase | null>(null);
   const [flash, setFlash] = useState("");
   const [error, setError] = useState("");
-
-  const [form, setForm] = useState({
-    purchaseDate: todayISO(),
-    purchaseTime: "",
-    itemName: "",
-    inventoryItemId: "" as string,
-    useNewItem: false,
-    newName: "",
-    newCategory: "",
-    newUnit: "",
-    quantityNumeric: "",
-    quantityRaw: "",
-    unitRaw: "",
-    unitPrice: "",
-    totalAmount: "",
-    paidAmount: "",
-    paymentStatus: "UNPAID" as "PAID" | "UNPAID" | "PARTIAL",
-    supplier: "",
-    purchasedBy: "",
-    destination: "" as Dest,
-    notes: "",
-  });
+  const [priceAnchor, setPriceAnchor] = useState<PriceAnchor>("unit");
+  const [form, setForm] = useState<PurchaseFormState>(emptyForm);
 
   const query = useQuery({
     queryKey: ["v3-purchases", q, from, to, destination, page],
@@ -71,47 +137,177 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
   });
 
   const itemsQ = useQuery({
-    queryKey: ["v3-items-brief", form.itemName],
-    queryFn: () => listV3Items(form.itemName),
-    enabled: open && (form.destination === "WAREHOUSE" || form.destination === "KITCHEN_DIRECT"),
+    queryKey: ["v3-items-brief", form.itemName, form.newName],
+    queryFn: () => listV3Items(form.useNewItem ? form.newName : form.itemName),
+    enabled: open && form.destination === "WAREHOUSE",
   });
 
   const rows = query.data?.rows ?? [];
   const total = query.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / (query.data?.pageSize ?? 50)));
 
-  const computedTotal = useMemo(() => {
-    const qty = Number(form.quantityNumeric);
-    const price = Number(form.unitPrice);
-    if (Number.isFinite(qty) && Number.isFinite(price) && qty > 0) return qty * price;
-    return null;
-  }, [form.quantityNumeric, form.unitPrice]);
+  function openCreate() {
+    setEditing(null);
+    setForm(emptyForm());
+    setPriceAnchor("unit");
+    setError("");
+    setOpen(true);
+  }
+
+  function openEdit(p: V3Purchase) {
+    if (p.status === "voided") return;
+    setDetail(null);
+    setEditing(p);
+    setForm(formFromPurchase(p));
+    setPriceAnchor("unit");
+    setError("");
+    setOpen(true);
+  }
+
+  function applyQtyChange(qtyStr: string) {
+    setForm((f) => {
+      const qty = Number(qtyStr);
+      if (!(Number.isFinite(qty) && qty > 0)) {
+        return { ...f, quantityNumeric: qtyStr };
+      }
+      if (priceAnchor === "unit") {
+        const unit = Number(f.unitPrice);
+        if (Number.isFinite(unit)) {
+          return { ...f, quantityNumeric: qtyStr, totalAmount: String(roundMoney(qty * unit)) };
+        }
+      } else {
+        const tot = Number(f.totalAmount);
+        if (Number.isFinite(tot)) {
+          return { ...f, quantityNumeric: qtyStr, unitPrice: String(roundMoney(tot / qty)) };
+        }
+      }
+      return { ...f, quantityNumeric: qtyStr };
+    });
+  }
+
+  function applyUnitPriceChange(priceStr: string) {
+    setPriceAnchor("unit");
+    setForm((f) => {
+      const unit = Number(priceStr);
+      const qty = Number(f.quantityNumeric);
+      if (Number.isFinite(unit) && Number.isFinite(qty) && qty > 0) {
+        return { ...f, unitPrice: priceStr, totalAmount: String(roundMoney(qty * unit)) };
+      }
+      return { ...f, unitPrice: priceStr };
+    });
+  }
+
+  function applyTotalChange(totalStr: string) {
+    setPriceAnchor("total");
+    setForm((f) => {
+      const tot = Number(totalStr);
+      const qty = Number(f.quantityNumeric);
+      if (Number.isFinite(tot) && Number.isFinite(qty) && qty > 0) {
+        return { ...f, totalAmount: totalStr, unitPrice: String(roundMoney(tot / qty)) };
+      }
+      return { ...f, totalAmount: totalStr };
+    });
+  }
 
   const save = useMutation({
     mutationFn: async () => {
+      const mode: "edit" | "create" = editing ? "edit" : "create";
       if (!form.destination) throw new Error(lang === "id" ? "Pilih tujuan" : "اختر الوجهة");
-      const totalAmount = form.totalAmount !== "" ? Number(form.totalAmount) : (computedTotal ?? 0);
+      const qty = Number(form.quantityNumeric);
+      const unitPrice = Number(form.unitPrice || 0);
+      let totalAmount = Number(form.totalAmount || 0);
+      if (Number.isFinite(qty) && qty > 0 && Number.isFinite(unitPrice) && form.totalAmount === "") {
+        totalAmount = roundMoney(qty * unitPrice);
+      }
+      if (!(Number.isFinite(totalAmount) && totalAmount >= 0)) {
+        throw new Error(lang === "id" ? "Total tidak valid" : "الإجمالي غير صالح");
+      }
+
+      const isWarehouse = form.destination === "WAREHOUSE";
+      const itemName = isWarehouse
+        ? (form.useNewItem ? form.newName : form.itemName)
+        : form.itemName;
+      if (!itemName.trim()) {
+        throw new Error(
+          form.destination === "CONSUMABLE"
+            ? (lang === "id" ? "Nama / tujuan wajib" : "اسم المادة / الغرض مطلوب")
+            : (lang === "id" ? "Nama bahan wajib" : "اسم المادة مطلوب"),
+        );
+      }
+      if (isWarehouse && !form.useNewItem && !form.inventoryItemId && !editing) {
+        throw new Error(lang === "id" ? "Pilih bahan gudang" : "اختر مادة المستودع");
+      }
+      if (isWarehouse && form.useNewItem && !form.newName.trim()) {
+        throw new Error(lang === "id" ? "Nama bahan baru wajib" : "اسم المادة الجديدة مطلوب");
+      }
+
+      if (editing) {
+        if (editing.paidAmount > 0 && totalAmount + 1e-9 < editing.paidAmount) {
+          throw new Error(
+            lang === "id"
+              ? `Total tidak boleh kurang dari yang sudah dibayar (${editing.paidAmount})`
+              : `الإجمالي لا يمكن أن يكون أقل من المدفوع بالفعل (${editing.paidAmount})`,
+          );
+        }
+        await patchV3Purchase(editing.id, {
+          purchaseDate: form.purchaseDate,
+          purchaseTime: form.purchaseTime,
+          itemName: itemName.trim(),
+          inventoryItemId:
+            isWarehouse && !form.useNewItem && form.inventoryItemId
+              ? Number(form.inventoryItemId)
+              : (isWarehouse && editing.inventoryItemId ? editing.inventoryItemId : null),
+          newItem:
+            isWarehouse && form.useNewItem
+              ? {
+                  name: form.newName.trim(),
+                  category: form.newCategory,
+                  baseUnit: form.newUnit || form.unitRaw,
+                }
+              : null,
+          quantityNumeric: form.quantityNumeric === "" ? null : qty,
+          quantityRaw: form.quantityNumeric,
+          unitRaw: form.unitRaw || form.newUnit,
+          unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
+          totalAmount,
+          supplier: form.supplier,
+          purchasedBy: form.purchasedBy,
+          destination: form.destination,
+          notes: form.notes,
+        }).then((raw) => {
+          const id = Number((raw as { purchaseId?: number; purchase?: { id?: number } })?.purchaseId
+            ?? (raw as { purchase?: { id?: number } })?.purchase?.id);
+          if (!Number.isFinite(id) || id <= 0) {
+            throw new Error("لم يتم تأكيد تعديل المشتريات من الخادم.");
+          }
+        });
+        return mode;
+      }
+
       let paidAmount = Number(form.paidAmount || 0);
       if (form.paymentStatus === "PAID") paidAmount = totalAmount;
       if (form.paymentStatus === "UNPAID") paidAmount = 0;
 
-      return postV3Purchase({
+      const raw = await postV3Purchase({
         purchaseDate: form.purchaseDate,
         purchaseTime: form.purchaseTime,
-        itemName: form.useNewItem ? form.newName || form.itemName : form.itemName,
+        itemName: itemName.trim(),
         inventoryItemId:
-          form.useNewItem || !form.inventoryItemId ? null : Number(form.inventoryItemId),
-        newItem: form.useNewItem
-          ? {
-              name: form.newName || form.itemName,
-              category: form.newCategory,
-              baseUnit: form.newUnit || form.unitRaw,
-            }
-          : null,
-        quantityNumeric: form.quantityNumeric === "" ? null : Number(form.quantityNumeric),
-        quantityRaw: form.quantityRaw || form.quantityNumeric,
+          isWarehouse && !form.useNewItem && form.inventoryItemId
+            ? Number(form.inventoryItemId)
+            : null,
+        newItem:
+          isWarehouse && form.useNewItem
+            ? {
+                name: form.newName.trim(),
+                category: form.newCategory,
+                baseUnit: form.newUnit || form.unitRaw,
+              }
+            : null,
+        quantityNumeric: form.quantityNumeric === "" ? null : qty,
+        quantityRaw: form.quantityNumeric,
         unitRaw: form.unitRaw || form.newUnit,
-        unitPrice: Number(form.unitPrice || 0),
+        unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
         totalAmount,
         paidAmount,
         paymentStatus: form.paymentStatus,
@@ -121,17 +317,22 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
         notes: form.notes,
         clientRequestId: newClientRequestId(),
       });
+      assertPurchaseCommitted(raw, form.destination);
+      return mode;
     },
-    onSuccess: async () => {
+    onSuccess: async (mode) => {
       setOpen(false);
-      setFlash(lang === "id" ? "Pembelian tersimpan" : "تم حفظ المشتريات");
+      setEditing(null);
+      setFlash(mode === "edit"
+        ? (lang === "id" ? "Pembelian diperbarui" : "تم تحديث المشتريات")
+        : (lang === "id" ? "Pembelian tersimpan" : "تم حفظ المشتريات"));
       setError("");
-      await qc.invalidateQueries({ queryKey: ["v3-purchases"] });
-      await qc.invalidateQueries({ queryKey: ["v3-warehouse"] });
-      await qc.invalidateQueries({ queryKey: ["v3-finance"] });
-      await qc.invalidateQueries({ queryKey: ["v3-kitchen"] });
+      await invalidatePurchaseViews(qc);
     },
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => {
+      // Keep modal/form open with entered values; never fake success.
+      setError(e.message || (lang === "id" ? "Gagal menyimpan" : "فشل الحفظ"));
+    },
   });
 
   const payMut = useMutation({
@@ -150,13 +351,12 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
     mutationFn: (id: number) => voidV3Purchase(id, lang === "id" ? "Dibatalkan dari UI" : "إلغاء من الواجهة"),
     onSuccess: async () => {
       setFlash(lang === "id" ? "Pembelian dibatalkan" : "تم إلغاء المشتريات");
-      await qc.invalidateQueries({ queryKey: ["v3-purchases"] });
-      await qc.invalidateQueries({ queryKey: ["v3-warehouse"] });
-      await qc.invalidateQueries({ queryKey: ["v3-finance"] });
-      await qc.invalidateQueries({ queryKey: ["v3-kitchen"] });
+      await invalidatePurchaseViews(qc);
     },
     onError: (e: Error) => setError(e.message),
   });
+
+  const isEdit = Boolean(editing);
 
   return (
     <div className="fade-up">
@@ -169,16 +369,16 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
       />
       <PageHint>
         {lang === "id"
-          ? "Pilih tujuan dengan jelas: Gudang / Dapur langsung / Konsumsi."
-          : "اختر الوجهة بوضوح: المستودع / المطبخ مباشرة / شراء عادي."}
+          ? "Pilih tujuan dengan jelas: Ke gudang / Ke dapur langsung / Pembelian saja."
+          : "اختر الوجهة بوضوح: للمستودع / للمطبخ مباشرة / مشتريات فقط / مستهلكات."}
       </PageHint>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <PrimaryButton onClick={() => { setOpen(true); setError(""); }}>+ {lang === "id" ? "Tambah pembelian" : "إضافة مشتريات"}</PrimaryButton>
+        <PrimaryButton onClick={openCreate}>+ {lang === "id" ? "Tambah pembelian" : "إضافة مشتريات"}</PrimaryButton>
         <TextInput className="max-w-xs" placeholder={lang === "id" ? "Cari..." : "بحث..."} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
         <TextInput type="date" className="max-w-[150px]" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} />
         <TextInput type="date" className="max-w-[150px]" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} />
-        <SelectInput className="max-w-[180px]" value={destination} onChange={(e) => { setDestination(e.target.value); setPage(1); }}>
+        <SelectInput className="max-w-[220px]" value={destination} onChange={(e) => { setDestination(e.target.value); setPage(1); }}>
           <option value="">{lang === "id" ? "Semua tujuan" : "كل الوجهات"}</option>
           <option value="WAREHOUSE">{destinationLabel("WAREHOUSE", lang === "id" ? "id" : "ar")}</option>
           <option value="KITCHEN_DIRECT">{destinationLabel("KITCHEN_DIRECT", lang === "id" ? "id" : "ar")}</option>
@@ -186,7 +386,7 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
         </SelectInput>
       </div>
 
-      {error ? <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div> : null}
+      {error && !open ? <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div> : null}
       <Flash message={flash} />
 
       <div className="panel soft-shadow overflow-auto">
@@ -236,8 +436,13 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
                 <td className="px-3 py-2.5">
                   <div className="flex flex-wrap gap-1">
                     <SecondaryButton className="!px-2 !py-1 text-[11px]" onClick={() => setDetail(r)}>
-                      {lang === "id" ? "Detail" : "عرض"}
+                      {lang === "id" ? "Detail" : "عرض التفاصيل"}
                     </SecondaryButton>
+                    {r.status !== "voided" ? (
+                      <SecondaryButton className="!px-2 !py-1 text-[11px]" onClick={() => openEdit(r)}>
+                        {lang === "id" ? "Edit" : "تعديل"}
+                      </SecondaryButton>
+                    ) : null}
                     {r.paymentStatus !== "PAID" ? (
                       <SecondaryButton className="!px-2 !py-1 text-[11px]" onClick={() => setPayFor(r)}>
                         {lang === "id" ? "Bayar" : "دفع"}
@@ -268,26 +473,50 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
       </div>
 
       {open ? (
-        <Modal title={lang === "id" ? "Tambah pembelian" : "إضافة مشتريات"} onClose={() => setOpen(false)}>
+        <Modal
+          title={
+            isEdit
+              ? (lang === "id" ? "Edit pembelian" : "تعديل المشتريات")
+              : (lang === "id" ? "Tambah pembelian" : "إضافة مشتريات")
+          }
+          onClose={() => { setOpen(false); setEditing(null); }}
+        >
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
               <ChoiceCard
                 selected={form.destination === "WAREHOUSE"}
-                title={lang === "id" ? "Gudang" : "المستودع"}
-                subtitle={lang === "id" ? "Masuk ke stok gudang." : "تُسجل وتُضاف الكمية إلى المستودع."}
-                onClick={() => setForm((f) => ({ ...f, destination: "WAREHOUSE" }))}
+                title={lang === "id" ? "Ke gudang" : "للمستودع"}
+                subtitle={lang === "id" ? "Masuk ke stok gudang + riwayat masuk." : "تُضاف للمستودع وتظهر في إدخال المستودع."}
+                onClick={() => setForm((f) => ({
+                  ...f,
+                  destination: "WAREHOUSE",
+                  useNewItem: false,
+                  newName: "",
+                }))}
               />
               <ChoiceCard
                 selected={form.destination === "KITCHEN_DIRECT"}
-                title={lang === "id" ? "Dapur langsung" : "المطبخ مباشرة"}
-                subtitle={lang === "id" ? "Langsung ke dapur, tanpa gudang." : "تدخل المطبخ مباشرة دون المرور بالمستودع."}
-                onClick={() => setForm((f) => ({ ...f, destination: "KITCHEN_DIRECT" }))}
+                title={lang === "id" ? "Ke dapur langsung" : "للمطبخ مباشرة"}
+                subtitle={lang === "id" ? "Langsung ke dapur, tanpa gudang." : "تدخل المطبخ مباشرة دون زيادة المستودع."}
+                onClick={() => setForm((f) => ({
+                  ...f,
+                  destination: "KITCHEN_DIRECT",
+                  inventoryItemId: "",
+                  useNewItem: false,
+                  newName: "",
+                }))}
               />
               <ChoiceCard
                 selected={form.destination === "CONSUMABLE"}
-                title={lang === "id" ? "Konsumsi" : "شراء عادي / مستهلك"}
-                subtitle={lang === "id" ? "Catat saja, tanpa stok." : "تُسجل كمشتريات فقط ولا تدخل المخزون."}
-                onClick={() => setForm((f) => ({ ...f, destination: "CONSUMABLE" }))}
+                title={lang === "id" ? "Pembelian saja / konsumsi" : "مشتريات فقط / مستهلكات"}
+                subtitle={lang === "id" ? "Catat saja, tanpa stok." : "تُسجل كمشتريات فقط — بدون مستودع أو مطبخ."}
+                onClick={() => setForm((f) => ({
+                  ...f,
+                  destination: "CONSUMABLE",
+                  inventoryItemId: "",
+                  useNewItem: false,
+                  newName: "",
+                }))}
               />
             </div>
 
@@ -298,29 +527,38 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
               <FormField label={lang === "id" ? "Jam" : "الوقت"}>
                 <TextInput value={form.purchaseTime} onChange={(e) => setForm((f) => ({ ...f, purchaseTime: e.target.value }))} placeholder="10:30" />
               </FormField>
-              <FormField label={lang === "id" ? "Nama / tujuan" : "المادة / الغرض"} className="sm:col-span-2">
-                <TextInput value={form.itemName} onChange={(e) => setForm((f) => ({ ...f, itemName: e.target.value }))} />
-              </FormField>
             </div>
 
-            {(form.destination === "WAREHOUSE" || form.destination === "KITCHEN_DIRECT") ? (
+            {form.destination === "WAREHOUSE" ? (
               <div className="rounded-xl border border-[hsl(var(--border))] p-3">
                 <div className="mb-2 flex flex-wrap gap-2">
                   <SecondaryButton type="button" onClick={() => setForm((f) => ({ ...f, useNewItem: false }))}>
                     {lang === "id" ? "Pilih bahan ada" : "اختيار مادة موجودة"}
                   </SecondaryButton>
-                  <SecondaryButton type="button" onClick={() => setForm((f) => ({ ...f, useNewItem: true }))}>
+                  <SecondaryButton type="button" onClick={() => setForm((f) => ({ ...f, useNewItem: true, inventoryItemId: "" }))}>
                     + {lang === "id" ? "Bahan baru" : "إضافة مادة جديدة"}
                   </SecondaryButton>
                 </div>
                 {form.useNewItem ? (
                   <div className="grid gap-2 sm:grid-cols-3">
-                    <TextInput placeholder={lang === "id" ? "Nama" : "اسم المادة"} value={form.newName} onChange={(e) => setForm((f) => ({ ...f, newName: e.target.value }))} />
+                    <TextInput placeholder={lang === "id" ? "Nama" : "اسم المادة"} value={form.newName} onChange={(e) => setForm((f) => ({ ...f, newName: e.target.value, itemName: e.target.value }))} />
                     <TextInput placeholder={lang === "id" ? "Kategori" : "التصنيف"} value={form.newCategory} onChange={(e) => setForm((f) => ({ ...f, newCategory: e.target.value }))} />
                     <TextInput placeholder={lang === "id" ? "Satuan" : "الوحدة"} value={form.newUnit} onChange={(e) => setForm((f) => ({ ...f, newUnit: e.target.value }))} />
                   </div>
                 ) : (
-                  <SelectInput value={form.inventoryItemId} onChange={(e) => setForm((f) => ({ ...f, inventoryItemId: e.target.value }))}>
+                  <SelectInput
+                    value={form.inventoryItemId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const found = (itemsQ.data?.rows ?? []).find((i) => String(i.id) === id);
+                      setForm((f) => ({
+                        ...f,
+                        inventoryItemId: id,
+                        itemName: found?.name || f.itemName,
+                        unitRaw: found?.baseUnit || f.unitRaw,
+                      }));
+                    }}
+                  >
                     <option value="">{lang === "id" ? "Pilih bahan..." : "اختر المادة..."}</option>
                     {(itemsQ.data?.rows ?? []).map((i) => (
                       <option key={i.id} value={i.id}>{i.name}</option>
@@ -330,33 +568,54 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
               </div>
             ) : null}
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <FormField label={lang === "id" ? "Qty angka" : "الكمية"}>
-                <NumberInput value={form.quantityNumeric} onChange={(e) => setForm((f) => ({ ...f, quantityNumeric: e.target.value, totalAmount: "" }))} />
+            {form.destination === "KITCHEN_DIRECT" ? (
+              <FormField label={lang === "id" ? "Nama bahan" : "اسم المادة"}>
+                <TextInput value={form.itemName} onChange={(e) => setForm((f) => ({ ...f, itemName: e.target.value }))} />
               </FormField>
-              <FormField label={lang === "id" ? "Qty teks" : "الكمية نصاً"}>
-                <TextInput value={form.quantityRaw} onChange={(e) => setForm((f) => ({ ...f, quantityRaw: e.target.value }))} />
+            ) : null}
+
+            {form.destination === "CONSUMABLE" ? (
+              <FormField label={lang === "id" ? "Nama / tujuan" : "اسم المادة / الغرض"}>
+                <TextInput value={form.itemName} onChange={(e) => setForm((f) => ({ ...f, itemName: e.target.value }))} />
+              </FormField>
+            ) : null}
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <FormField label={lang === "id" ? "Kuantitas" : "الكمية"} required>
+                <NumberInput value={form.quantityNumeric} onChange={(e) => applyQtyChange(e.target.value)} />
               </FormField>
               <FormField label={lang === "id" ? "Satuan" : "الوحدة"}>
                 <TextInput value={form.unitRaw} onChange={(e) => setForm((f) => ({ ...f, unitRaw: e.target.value }))} />
               </FormField>
               <FormField label={lang === "id" ? "Harga satuan" : "سعر الوحدة"}>
-                <NumberInput value={form.unitPrice} onChange={(e) => setForm((f) => ({ ...f, unitPrice: e.target.value, totalAmount: "" }))} />
+                <NumberInput value={form.unitPrice} onChange={(e) => applyUnitPriceChange(e.target.value)} />
               </FormField>
-              <FormField label={lang === "id" ? "Total" : "الإجمالي"}>
-                <NumberInput
-                  value={form.totalAmount !== "" ? form.totalAmount : (computedTotal != null ? String(computedTotal) : "")}
-                  onChange={(e) => setForm((f) => ({ ...f, totalAmount: e.target.value }))}
-                />
+              <FormField
+                label={lang === "id" ? "Total" : "الإجمالي"}
+                hint={
+                  form.totalAmount !== ""
+                    ? formatIDR(Number(form.totalAmount) || 0)
+                    : (lang === "id" ? "Dihitung otomatis" : "يُحسب تلقائياً")
+                }
+              >
+                <NumberInput value={form.totalAmount} onChange={(e) => applyTotalChange(e.target.value)} />
               </FormField>
-              <FormField label={lang === "id" ? "Status bayar" : "حالة الدفع"}>
-                <SelectInput value={form.paymentStatus} onChange={(e) => setForm((f) => ({ ...f, paymentStatus: e.target.value as typeof f.paymentStatus }))}>
-                  <option value="UNPAID">{paymentStatusLabel("UNPAID", lang === "id" ? "id" : "ar")}</option>
-                  <option value="PARTIAL">{paymentStatusLabel("PARTIAL", lang === "id" ? "id" : "ar")}</option>
-                  <option value="PAID">{paymentStatusLabel("PAID", lang === "id" ? "id" : "ar")}</option>
-                </SelectInput>
-              </FormField>
-              {form.paymentStatus === "PARTIAL" ? (
+              {!isEdit ? (
+                <FormField label={lang === "id" ? "Status bayar" : "حالة الدفع"}>
+                  <SelectInput value={form.paymentStatus} onChange={(e) => setForm((f) => ({ ...f, paymentStatus: e.target.value as typeof f.paymentStatus }))}>
+                    <option value="UNPAID">{paymentStatusLabel("UNPAID", lang === "id" ? "id" : "ar")}</option>
+                    <option value="PARTIAL">{paymentStatusLabel("PARTIAL", lang === "id" ? "id" : "ar")}</option>
+                    <option value="PAID">{paymentStatusLabel("PAID", lang === "id" ? "id" : "ar")}</option>
+                  </SelectInput>
+                </FormField>
+              ) : (
+                <FormField label={lang === "id" ? "Sudah dibayar" : "المدفوع (ثابت)"}>
+                  <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.4)] px-3 py-2 font-mono text-sm">
+                    {formatIDR(editing?.paidAmount ?? 0)}
+                  </div>
+                </FormField>
+              )}
+              {!isEdit && form.paymentStatus === "PARTIAL" ? (
                 <FormField label={lang === "id" ? "Dibayar" : "المدفوع"}>
                   <NumberInput value={form.paidAmount} onChange={(e) => setForm((f) => ({ ...f, paidAmount: e.target.value }))} />
                 </FormField>
@@ -374,7 +633,7 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
 
             {error ? <div className="text-sm text-red-700">{error}</div> : null}
             <div className="flex justify-end gap-2">
-              <SecondaryButton onClick={() => setOpen(false)}>{lang === "id" ? "Tutup" : "إغلاق"}</SecondaryButton>
+              <SecondaryButton onClick={() => { setOpen(false); setEditing(null); }}>{lang === "id" ? "Tutup" : "إغلاق"}</SecondaryButton>
               <PrimaryButton disabled={save.isPending} onClick={() => save.mutate()}>
                 {lang === "id" ? "Simpan" : "حفظ"}
               </PrimaryButton>
@@ -394,17 +653,30 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
       ) : null}
 
       {detail ? (
-        <PurchaseDetailModal lang={lang} purchase={detail} onClose={() => setDetail(null)} />
+        <PurchaseDetailModal
+          lang={lang}
+          purchase={detail}
+          onClose={() => setDetail(null)}
+          onEdit={() => openEdit(detail)}
+        />
       ) : null}
     </div>
   );
 }
 
-function PurchaseDetailModal({ lang, purchase, onClose }: { lang: Lang; purchase: V3Purchase; onClose: () => void }) {
+function PurchaseDetailModal({
+  lang, purchase, onClose, onEdit,
+}: {
+  lang: Lang;
+  purchase: V3Purchase;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
   const pays = useQuery({
     queryKey: ["v3-purchase-pays", purchase.id],
     queryFn: () => listV3PurchasePayments(purchase.id),
   });
+  const canEdit = purchase.status !== "voided";
   return (
     <Modal title={lang === "id" ? "Detail pembelian" : "تفاصيل المشتريات"} onClose={onClose}>
       <div className="mb-4 grid gap-2 text-sm sm:grid-cols-2">
@@ -447,7 +719,10 @@ function PurchaseDetailModal({ lang, purchase, onClose }: { lang: Lang; purchase
           </tbody>
         </table>
       </div>
-      <div className="mt-3 flex justify-end">
+      <div className="mt-3 flex justify-end gap-2">
+        {canEdit ? (
+          <PrimaryButton onClick={onEdit}>{lang === "id" ? "Edit" : "تعديل"}</PrimaryButton>
+        ) : null}
         <SecondaryButton onClick={onClose}>{lang === "id" ? "Tutup" : "إغلاق"}</SecondaryButton>
       </div>
     </Modal>
@@ -473,7 +748,9 @@ function PayModal({
       </FormField>
       <div className="mt-3 flex justify-end gap-2">
         <SecondaryButton onClick={onClose}>{lang === "id" ? "Tutup" : "إغلاق"}</SecondaryButton>
-        <PrimaryButton disabled={pending} onClick={() => onPay(Number(amount))}>{lang === "id" ? "Bayar" : "دفع"}</PrimaryButton>
+        <PrimaryButton disabled={pending} onClick={() => onPay(Number(amount))}>
+          {lang === "id" ? "Simpan" : "حفظ"}
+        </PrimaryButton>
       </div>
     </Modal>
   );

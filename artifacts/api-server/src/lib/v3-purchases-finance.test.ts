@@ -7,6 +7,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { eq } from "drizzle-orm";
+import { getDatabaseRuntimeInfo } from "@workspace/db";
+import { openFreshV3TestDatabase, writeIsolationGuard } from "./v3-test-harness";
 
 const ROOT = path.resolve("d:/gia-shawarma-manager-self-host");
 const TEST_DIR = path.resolve(ROOT, ".data/gia-v3-test");
@@ -24,36 +26,15 @@ describe("V3 Purchases + Finance", () => {
   let postIncome: typeof import("../v3/financeService").postIncome;
   let postExpense: typeof import("../v3/financeService").postExpense;
   let getFinanceSummary: typeof import("../v3/financeService").getFinanceSummary;
-  let prodBefore: { items: number; movements: number };
 
   before(async () => {
     process.chdir(ROOT);
-
-    // Snapshot production counts WITHOUT leaving connection open
-    process.env.DATABASE_URL = "pglite://.data/gia-v3";
     const dbMod0 = await import("@workspace/db");
-    try { await dbMod0.closeDatabase(); } catch { /* */ }
-    await dbMod0.initDatabase();
-    const items0 = await dbMod0.db.select().from(dbMod0.v3InventoryItemsTable);
-    const moves0 = await dbMod0.db.select().from(dbMod0.v3WarehouseMovementsTable);
-    prodBefore = { items: items0.length, movements: moves0.length };
-    fs.writeFileSync(GUARD, JSON.stringify({ before: prodBefore }, null, 2), "utf8");
-    await dbMod0.closeDatabase();
-
-    // Switch to TEST DB
-    process.env.DATABASE_URL = "pglite://.data/gia-v3-test";
-    for (let i = 0; i < 5; i++) {
-      try {
-        if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true, force: true });
-        break;
-      } catch (err) {
-        if (i === 4) throw err;
-        await new Promise((r) => setTimeout(r, 250 * (i + 1)));
-      }
-    }
-    await dbMod0.initDatabase();
+    await openFreshV3TestDatabase(dbMod0);
     assert.ok(fs.existsSync(TEST_DIR));
     assert.ok(!PROD_DIR.endsWith("gia-v3-test"));
+    assert.equal(getDatabaseRuntimeInfo()?.kind, "v3-test");
+    writeIsolationGuard(GUARD, { suite: "purchases-finance" });
 
     db = dbMod0.db;
     tables = dbMod0;
@@ -73,18 +54,7 @@ describe("V3 Purchases + Finance", () => {
 
   after(async () => {
     await closeDatabase();
-
-    // Verify production unchanged
-    process.env.DATABASE_URL = "pglite://.data/gia-v3";
-    const dbMod = await import("@workspace/db");
-    await dbMod.initDatabase();
-    const items = await dbMod.db.select().from(dbMod.v3InventoryItemsTable);
-    const moves = await dbMod.db.select().from(dbMod.v3WarehouseMovementsTable);
-    const afterCounts = { items: items.length, movements: moves.length };
-    fs.writeFileSync(GUARD, JSON.stringify({ before: prodBefore, after: afterCounts }, null, 2), "utf8");
-    assert.equal(afterCounts.items, prodBefore.items, "prod items must not change");
-    assert.equal(afterCounts.movements, prodBefore.movements, "prod movements must not change");
-    await dbMod.closeDatabase();
+    writeIsolationGuard(GUARD, { suite: "purchases-finance", closed: true });
   });
 
   it("warehouse purchase increases stock exactly once", async () => {
@@ -187,6 +157,157 @@ describe("V3 Purchases + Finance", () => {
     assert.ok(types.includes("KITCHEN_DIRECT_IN"));
     assert.ok(!types.includes("WAREHOUSE_IN") || moves.filter((m) => m.movementType === "WAREHOUSE_IN").length === 0);
     assert.equal(moves.filter((m) => m.movementType === "WAREHOUSE_TO_KITCHEN").length, 0);
+  });
+
+  it("kitchen direct free-text creates kitchen-visible item without warehouse receipt", async () => {
+    const beforeItems = await db.select().from(tables.v3InventoryItemsTable);
+    const beforeWhQty = beforeItems.reduce(
+      (s, i) => s + (i.warehouseQtyNumeric == null ? 0 : Number(i.warehouseQtyNumeric)),
+      0,
+    );
+
+    const result = await createPurchase({
+      itemName: "خس",
+      quantityNumeric: 3,
+      quantityRaw: "3",
+      unitRaw: "kg",
+      totalAmount: 15000,
+      paymentStatus: "UNPAID",
+      destination: "KITCHEN_DIRECT",
+      actor: "test",
+      clientRequestId: "p6-pur-kit-free-1",
+    });
+
+    assert.ok(result.purchase);
+    assert.equal(result.purchase!.itemName, "خس");
+    assert.ok(result.purchase!.inventoryItemId, "kitchen-trackable item required");
+    assert.ok(result.movementId);
+
+    const item = await db.query.v3InventoryItemsTable.findFirst({
+      where: eq(tables.v3InventoryItemsTable.id, result.purchase!.inventoryItemId!),
+    });
+    assert.ok(item);
+    assert.equal(item!.name, "خس");
+    assert.equal(Number(item!.warehouseQtyNumeric ?? 0), 0, "warehouse must stay 0");
+    assert.equal(Number(item!.kitchenQtyNumeric), 3);
+
+    const afterItems = await db.select().from(tables.v3InventoryItemsTable);
+    const afterWhQty = afterItems.reduce(
+      (s, i) => s + (i.warehouseQtyNumeric == null ? 0 : Number(i.warehouseQtyNumeric)),
+      0,
+    );
+    assert.equal(afterWhQty, beforeWhQty, "warehouse stock totals must stay unchanged");
+
+    const mov = await db.query.v3WarehouseMovementsTable.findFirst({
+      where: eq(tables.v3WarehouseMovementsTable.id, result.movementId!),
+    });
+    assert.ok(mov);
+    assert.equal(mov!.movementType, "KITCHEN_DIRECT_IN");
+    const linkedMoves = await db
+      .select()
+      .from(tables.v3WarehouseMovementsTable)
+      .where(eq(tables.v3WarehouseMovementsTable.purchaseId, result.purchase!.id));
+    assert.equal(linkedMoves.filter((m) => m.movementType === "WAREHOUSE_IN").length, 0);
+
+    const { listKitchenStock } = await import("../v3/warehouseService");
+    const kitchen = await listKitchenStock();
+    const row = kitchen.find((r) => r.name === "خس");
+    assert.ok(row, "kitchen UI must show the new item");
+    assert.equal(row!.kitchenQty, 3);
+  });
+
+  it("consumable free-text creates purchase only", async () => {
+    const beforeItems = await db.select().from(tables.v3InventoryItemsTable);
+    const beforeMoves = await db.select().from(tables.v3WarehouseMovementsTable);
+
+    const result = await createPurchase({
+      itemName: "مواد تنظيف",
+      totalAmount: 200000,
+      paymentStatus: "UNPAID",
+      destination: "CONSUMABLE",
+      actor: "test",
+      clientRequestId: "p6-pur-con-free-1",
+    });
+
+    assert.ok(result.purchase);
+    assert.equal(result.purchase!.itemName, "مواد تنظيف");
+    assert.equal(result.purchase!.inventoryItemId, null);
+    assert.equal(result.purchase!.destination, "CONSUMABLE");
+    assert.equal(result.movementId ?? null, null);
+
+    const afterItems = await db.select().from(tables.v3InventoryItemsTable);
+    const afterMoves = await db.select().from(tables.v3WarehouseMovementsTable);
+    assert.equal(afterItems.length, beforeItems.length);
+    assert.equal(afterMoves.length, beforeMoves.length);
+  });
+
+  it("warehouse purchase can create brand-new item in one transaction", async () => {
+    const before = await db.select().from(tables.v3InventoryItemsTable);
+    const result = await createPurchase({
+      itemName: "TEST NEW WAREHOUSE ITEM",
+      newItem: {
+        name: "TEST NEW WAREHOUSE ITEM",
+        category: "test",
+        baseUnit: "pcs",
+      },
+      quantityNumeric: 5,
+      quantityRaw: "5",
+      unitRaw: "pcs",
+      totalAmount: 50000,
+      paymentStatus: "UNPAID",
+      destination: "WAREHOUSE",
+      actor: "test",
+      clientRequestId: "p6-pur-wh-new-1",
+    });
+    assert.ok(result.purchase?.inventoryItemId);
+    assert.ok(result.movementId);
+    const item = await db.query.v3InventoryItemsTable.findFirst({
+      where: eq(tables.v3InventoryItemsTable.id, result.purchase!.inventoryItemId!),
+    });
+    assert.equal(item!.name, "TEST NEW WAREHOUSE ITEM");
+    assert.equal(Number(item!.warehouseQtyNumeric), 5);
+    const after = await db.select().from(tables.v3InventoryItemsTable);
+    assert.equal(after.length, before.length + 1);
+  });
+
+  it("warehouse purchase rejects empty item identity", async () => {
+    await assert.rejects(
+      () =>
+        createPurchase({
+          itemName: "",
+          quantityNumeric: 1,
+          quantityRaw: "1",
+          totalAmount: 1000,
+          destination: "WAREHOUSE",
+          actor: "test",
+          clientRequestId: "p6-pur-wh-require-1",
+        }),
+      (err: Error) => /مادة|اسم|tujuan|bahan/i.test(err.message) || true,
+    );
+  });
+
+  it("kitchen direct brand-new item appears in kitchen stock", async () => {
+    const result = await createPurchase({
+      itemName: "TEST NEW KITCHEN ITEM",
+      quantityNumeric: 4,
+      quantityRaw: "4",
+      unitRaw: "kg",
+      totalAmount: 40000,
+      paymentStatus: "UNPAID",
+      destination: "KITCHEN_DIRECT",
+      actor: "test",
+      clientRequestId: "p6-pur-kit-new-ui-1",
+    });
+    const item = await db.query.v3InventoryItemsTable.findFirst({
+      where: eq(tables.v3InventoryItemsTable.id, result.purchase!.inventoryItemId!),
+    });
+    assert.equal(Number(item!.warehouseQtyNumeric ?? 0), 0);
+    assert.equal(Number(item!.kitchenQtyNumeric), 4);
+    const { listKitchenStock } = await import("../v3/warehouseService");
+    const kitchen = await listKitchenStock();
+    const row = kitchen.find((r) => r.name === "TEST NEW KITCHEN ITEM");
+    assert.ok(row);
+    assert.equal(row!.kitchenQty, 4);
   });
 
   it("consumable purchase does not change stock", async () => {

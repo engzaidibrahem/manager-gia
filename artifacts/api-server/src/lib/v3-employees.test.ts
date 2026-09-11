@@ -8,38 +8,12 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { and, eq } from "drizzle-orm";
 import { AppError } from "./errors";
+import { getDatabaseRuntimeInfo } from "@workspace/db";
+import { openFreshV3TestDatabase, writeIsolationGuard } from "./v3-test-harness";
 
 const ROOT = path.resolve("d:/gia-shawarma-manager-self-host");
 const TEST_DIR = path.resolve(ROOT, ".data/gia-v3-test");
 const GUARD = path.resolve(ROOT, "backups/gia-v3-phase7-prod-guard.json");
-
-async function countTable(db: typeof import("@workspace/db").db, table: string): Promise<number> {
-  const { sql } = await import("drizzle-orm");
-  try {
-    const res = await db.execute(sql.raw(`SELECT count(*)::int AS c FROM ${table}`));
-    const r = res as { rows?: { c: number }[] } | { c: number }[];
-    if (Array.isArray(r)) return Number(r[0]?.c ?? 0);
-    return Number(r.rows?.[0]?.c ?? 0);
-  } catch {
-    return -1;
-  }
-}
-
-async function snapshotProd(dbMod: typeof import("@workspace/db")) {
-  return {
-    inventory_items: await countTable(dbMod.db, "v3_inventory_items"),
-    warehouse_movements: await countTable(dbMod.db, "v3_warehouse_movements"),
-    purchases: await countTable(dbMod.db, "v3_purchases"),
-    purchase_payments: await countTable(dbMod.db, "v3_purchase_payments"),
-    capital_transactions: await countTable(dbMod.db, "v3_capital_transactions"),
-    income: await countTable(dbMod.db, "v3_income"),
-    expenses: await countTable(dbMod.db, "v3_expenses"),
-    employees: await countTable(dbMod.db, "v3_employees"),
-    attendance: await countTable(dbMod.db, "v3_attendance"),
-    payroll: await countTable(dbMod.db, "v3_payroll"),
-    salary_payments: await countTable(dbMod.db, "v3_salary_payments"),
-  };
-}
 
 describe("V3 Employees + Attendance + Payroll", () => {
   let db: typeof import("@workspace/db").db;
@@ -52,34 +26,14 @@ describe("V3 Employees + Attendance + Payroll", () => {
   let addSalaryPayment: typeof import("../v3/employeeService").addSalaryPayment;
   let postCapital: typeof import("../v3/financeService").postCapital;
   let getFinanceSummary: typeof import("../v3/financeService").getFinanceSummary;
-  let prodBefore: Awaited<ReturnType<typeof snapshotProd>>;
 
   before(async () => {
     process.chdir(ROOT);
-
-    process.env.DATABASE_URL = "pglite://.data/gia-v3";
     const dbMod0 = await import("@workspace/db");
-    try {
-      await dbMod0.closeDatabase();
-    } catch {
-      /* */
-    }
-    await dbMod0.initDatabase();
-    prodBefore = await snapshotProd(dbMod0);
-    fs.writeFileSync(GUARD, JSON.stringify({ before: prodBefore }, null, 2), "utf8");
-    await dbMod0.closeDatabase();
-
-    process.env.DATABASE_URL = "pglite://.data/gia-v3-test";
-    for (let i = 0; i < 5; i++) {
-      try {
-        if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true, force: true });
-        break;
-      } catch (err) {
-        if (i === 4) throw err;
-        await new Promise((r) => setTimeout(r, 250 * (i + 1)));
-      }
-    }
-    await dbMod0.initDatabase();
+    await openFreshV3TestDatabase(dbMod0);
+    assert.ok(fs.existsSync(TEST_DIR));
+    assert.equal(getDatabaseRuntimeInfo()?.kind, "v3-test");
+    writeIsolationGuard(GUARD, { suite: "employees" });
 
     db = dbMod0.db;
     tables = dbMod0;
@@ -98,20 +52,7 @@ describe("V3 Employees + Attendance + Payroll", () => {
 
   after(async () => {
     await closeDatabase();
-    process.env.DATABASE_URL = "pglite://.data/gia-v3";
-    const dbMod = await import("@workspace/db");
-    await dbMod.initDatabase();
-    const afterCounts = await snapshotProd(dbMod);
-    fs.writeFileSync(GUARD, JSON.stringify({ before: prodBefore, after: afterCounts }, null, 2), "utf8");
-    for (const key of Object.keys(prodBefore) as (keyof typeof prodBefore)[]) {
-      assert.equal(afterCounts[key], prodBefore[key], `prod ${key} must not change`);
-    }
-    const qa = await dbMod.db.execute(
-      (await import("drizzle-orm")).sql`SELECT count(*)::int AS c FROM v3_employees WHERE full_name ILIKE '%test%' OR full_name ILIKE '%qa%' OR full_name ILIKE '%أحمد اختبار%'`,
-    );
-    const qaCount = Array.isArray(qa) ? Number((qa as { c: number }[])[0]?.c ?? 0) : Number((qa as { rows: { c: number }[] }).rows[0]?.c ?? 0);
-    assert.equal(qaCount, 0, "no QA/test employees in production");
-    await dbMod.closeDatabase();
+    writeIsolationGuard(GUARD, { suite: "employees", closed: true });
   });
 
   it("A) create monthly employee Ahmed 5,000,000", async () => {

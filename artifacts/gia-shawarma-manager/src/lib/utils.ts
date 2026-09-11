@@ -9,19 +9,38 @@ export function formatIDR(value: number) {
   const n = Number(value);
   const amount = Number.isFinite(n) ? n : 0;
   const abs = Math.abs(amount);
-  const body = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(abs);
+  const body = new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 0,
+    numberingSystem: 'latn',
+  }).format(abs);
   return amount < 0 ? `-Rp ${body}` : `Rp ${body}`;
+}
+
+/** Map Arabic-Indic / Eastern Arabic digits to Western 0-9. Leaves other chars intact. */
+export function toWesternDigits(raw: string): string {
+  return raw
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
 }
 
 export function shortDate(value?: string) {
   if (!value) return '—';
-  return new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short' }).format(new Date(value));
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    numberingSystem: 'latn',
+  }).format(new Date(value));
 }
 
 export function shortDateTime(value?: string) {
   if (!value) return '—';
   const parsed = new Date(value);
-  return `${shortDate(value)} · ${new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(parsed)}`;
+  return `${shortDate(value)} · ${new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    numberingSystem: 'latn',
+  }).format(parsed)}`;
 }
 
 export function todayISO() {
@@ -33,16 +52,26 @@ export function todayISO() {
 }
 
 /** Format a YYYY-MM-DD business date without timezone shift. */
-export function formatBusinessDate(value?: string, locale = 'id-ID') {
+export function formatBusinessDate(value?: string, locale = 'en-GB') {
   if (!value) return '—';
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (!m) return shortDate(value);
   const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0);
-  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+  return new Intl.DateTimeFormat(locale, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    numberingSystem: 'latn',
+  }).format(date);
 }
 
 export function nowTime() {
-  return new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+  return new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    numberingSystem: 'latn',
+  }).format(new Date());
 }
 
 export function emptyRows<T extends Record<string, unknown>>(count: number, factory: () => T): T[] {

@@ -630,7 +630,7 @@ export async function listMovements(opts: {
       category: v3InventoryItemsTable.category,
     })
     .from(v3WarehouseMovementsTable)
-    .innerJoin(
+    .leftJoin(
       v3InventoryItemsTable,
       eq(v3WarehouseMovementsTable.inventoryItemId, v3InventoryItemsTable.id),
     )
@@ -640,7 +640,10 @@ export async function listMovements(opts: {
   let filtered = rows;
   if (opts.q?.trim()) {
     const q = opts.q.trim().toLowerCase();
-    filtered = rows.filter((r) => r.itemName.toLowerCase().includes(q));
+    filtered = rows.filter((r) => {
+      const name = (r.itemName || r.movement.originalNameRaw || "").toLowerCase();
+      return name.includes(q);
+    });
   }
 
   const total = filtered.length;
@@ -648,9 +651,9 @@ export async function listMovements(opts: {
   return {
     rows: filtered.slice(start, start + pageSize).map((r) => ({
       ...r.movement,
-      itemName: r.itemName,
-      itemUnit: r.itemUnit,
-      category: r.category,
+      itemName: r.itemName || r.movement.originalNameRaw || "",
+      itemUnit: r.itemUnit || r.movement.unitRaw || "",
+      category: r.category || "",
     })),
     total,
     page,
@@ -665,35 +668,156 @@ export async function listKitchenStock() {
     .where(eq(v3InventoryItemsTable.isActive, true))
     .orderBy(v3InventoryItemsTable.name);
 
-  const lastOut = await db.execute(sql`
+  const lastIn = await db.execute(sql`
     SELECT DISTINCT ON (inventory_item_id)
       inventory_item_id AS id,
       movement_date AS last_date,
       quantity_raw,
       unit_raw
     FROM v3_warehouse_movements
-    WHERE movement_type = 'WAREHOUSE_TO_KITCHEN' AND status = 'active'
+    WHERE movement_type IN ('WAREHOUSE_TO_KITCHEN', 'KITCHEN_DIRECT_IN')
+      AND status = 'active'
+      AND inventory_item_id IS NOT NULL
     ORDER BY inventory_item_id, movement_date DESC, id DESC
   `);
-  const lastRows = ((lastOut as unknown as { rows?: Array<Record<string, unknown>> }).rows
-    ?? (Array.isArray(lastOut) ? (lastOut as Array<Record<string, unknown>>) : [])) as Array<Record<string, unknown>>;
+  const lastRows = ((lastIn as unknown as { rows?: Array<Record<string, unknown>> }).rows
+    ?? (Array.isArray(lastIn) ? (lastIn as Array<Record<string, unknown>>) : [])) as Array<Record<string, unknown>>;
   const lastMap = new Map(lastRows.map((r) => [Number(r.id), r]));
 
-  return items
+  // Distinct unit_raw values among kitchen-affecting movements (for review flags).
+  const unitMix = await db.execute(sql`
+    SELECT inventory_item_id AS id, unit_raw
+    FROM v3_warehouse_movements
+    WHERE movement_type IN ('WAREHOUSE_TO_KITCHEN', 'KITCHEN_DIRECT_IN')
+      AND status = 'active'
+      AND inventory_item_id IS NOT NULL
+      AND NULLIF(TRIM(unit_raw), '') IS NOT NULL
+  `);
+  const mixRows = ((unitMix as unknown as { rows?: Array<Record<string, unknown>> }).rows
+    ?? (Array.isArray(unitMix) ? (unitMix as Array<Record<string, unknown>>) : [])) as Array<Record<string, unknown>>;
+  const mixMap = new Map<number, string[]>();
+  for (const r of mixRows) {
+    const id = Number(r.id);
+    const u = String(r.unit_raw || "").trim();
+    if (!u) continue;
+    const list = mixMap.get(id) || [];
+    if (!list.includes(u)) list.push(u);
+    mixMap.set(id, list);
+  }
+
+  const fromItems = items
     .filter((i) => Number(i.kitchenQtyNumeric || 0) > 0)
     .map((i) => {
       const last = lastMap.get(i.id);
+      const lastUnitRaw = last?.unit_raw ? String(last.unit_raw) : null;
+      const unitKeys = (mixMap.get(i.id) || []).map(normalizeKitchenUnitKey);
+      const distinctKeys = [...new Set(unitKeys.filter((k): k is string => Boolean(k)))];
+      const hasAmbiguous = (mixMap.get(i.id) || []).some((u) => normalizeKitchenUnitKey(u) == null);
+      const unitNeedsReview = hasAmbiguous || distinctKeys.length > 1;
+      const displayUnit = resolveKitchenDisplayUnit(i.baseUnit, lastUnitRaw);
+
       return {
         id: i.id,
         name: i.name,
         category: i.category,
+        /** Catalog unit as stored (may be polluted historical text like "3 كيلو"). */
         baseUnit: i.baseUnit,
+        /** Clean unit for the stock page — never a second quantity. */
+        displayUnit,
         kitchenQty: Number(i.kitchenQtyNumeric || 0),
         lastTransferDate: last?.last_date ? String(last.last_date) : null,
-        lastQuantityRaw: last?.quantity_raw ? String(last.quantity_raw) : null,
-        lastUnitRaw: last?.unit_raw ? String(last.unit_raw) : null,
+        lastUpdated: last?.last_date ? String(last.last_date) : null,
+        unitNeedsReview,
+        source: "ITEM" as const,
       };
     });
+
+  // Legacy / edge free-text kitchen-direct rows (no inventory_item_id) must still show.
+  const freeText = await db.execute(sql`
+    SELECT
+      COALESCE(NULLIF(TRIM(original_name_raw), ''), '—') AS name,
+      COALESCE(SUM(quantity_numeric), 0) AS kitchen_qty,
+      MAX(movement_date) AS last_date,
+      MAX(unit_raw) AS unit_raw
+    FROM v3_warehouse_movements
+    WHERE movement_type = 'KITCHEN_DIRECT_IN'
+      AND status = 'active'
+      AND inventory_item_id IS NULL
+      AND quantity_numeric IS NOT NULL
+    GROUP BY COALESCE(NULLIF(TRIM(original_name_raw), ''), '—')
+    HAVING COALESCE(SUM(quantity_numeric), 0) > 0
+  `);
+  const freeRows = ((freeText as unknown as { rows?: Array<Record<string, unknown>> }).rows
+    ?? (Array.isArray(freeText) ? (freeText as Array<Record<string, unknown>>) : [])) as Array<Record<string, unknown>>;
+
+  const fromFree = freeRows.map((r, idx) => {
+    const unitRaw = r.unit_raw ? String(r.unit_raw) : "";
+    return {
+      id: -1000 - idx,
+      name: String(r.name || "—"),
+      category: "",
+      baseUnit: unitRaw,
+      displayUnit: resolveKitchenDisplayUnit("", unitRaw),
+      kitchenQty: Number(r.kitchen_qty || 0),
+      lastTransferDate: r.last_date ? String(r.last_date) : null,
+      lastUpdated: r.last_date ? String(r.last_date) : null,
+      unitNeedsReview: normalizeKitchenUnitKey(unitRaw) == null && Boolean(unitRaw.trim()),
+      source: "FREE_TEXT" as const,
+    };
+  });
+
+  return [...fromItems, ...fromFree].sort((a, b) => a.name.localeCompare(b.name, "ar"));
+}
+
+/** Normalize kitchen units for compatibility checks. Digits ⇒ ambiguous (e.g. "3 كيلو"). */
+export function normalizeKitchenUnitKey(unit: string | null | undefined): string | null {
+  const s = String(unit || "").trim().toLowerCase();
+  if (!s) return null;
+  if (/\d/.test(s)) return null;
+  const compact = s.replace(/\s+/g, "");
+  if (["kg", "كيلو", "كغ", "كجم", "كilo", "kilogram", "كيلوغرام"].includes(compact) || compact.includes("كيلو")) {
+    return "kg";
+  }
+  if (["l", "liter", "litre", "لتر", "ليتر"].includes(compact) || compact.includes("لتر")) {
+    return "l";
+  }
+  if (["pcs", "pc", "piece", "قطعة", "حبة", "حبه", "قطعة"].includes(compact)) {
+    return "pcs";
+  }
+  if (["g", "gram", "غرام", "جم"].includes(compact)) return "g";
+  return compact;
+}
+
+/**
+ * Prefer a clean unit for the Kitchen stock page.
+ * Never surface polluted catalog values like "3 كيلو" as if they were a second stock qty.
+ */
+export function resolveKitchenDisplayUnit(
+  baseUnit: string | null | undefined,
+  lastUnitRaw: string | null | undefined,
+): string {
+  const last = String(lastUnitRaw || "").trim();
+  const base = String(baseUnit || "").trim();
+  if (last && normalizeKitchenUnitKey(last)) {
+    const key = normalizeKitchenUnitKey(last)!;
+    if (key === "kg") return "kg";
+    if (key === "l") return "L";
+    return last;
+  }
+  if (base && normalizeKitchenUnitKey(base)) return base;
+  // Polluted "3 كيلو" → extract trailing unit word if possible
+  for (const candidate of [last, base]) {
+    if (!candidate) continue;
+    const m = candidate.match(/(?:^|\s)(kg|كيلو|كغ|كجم|لتر|ليتر|قطعة|حبة|g|غرام)\s*$/i);
+    if (m?.[1]) {
+      const key = normalizeKitchenUnitKey(m[1]);
+      if (key === "kg") return "kg";
+      if (key === "l") return "L";
+      return m[1];
+    }
+  }
+  if (last && !/\d/.test(last)) return last;
+  return "—";
 }
 
 export async function voidMovement(input: {
@@ -717,7 +841,9 @@ export async function voidMovement(input: {
       })
       .where(eq(v3WarehouseMovementsTable.id, input.movementId))
       .returning();
-    await recomputeItemBalances(tx, mov.inventoryItemId);
+    if (mov.inventoryItemId != null) {
+      await recomputeItemBalances(tx, mov.inventoryItemId);
+    }
     return { idempotent: false as const, movement: updated };
   });
 }

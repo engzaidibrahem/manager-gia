@@ -111,6 +111,7 @@ server {
 - غيّر `DATABASE_URL` وبيانات PostgreSQL إلى قيمك الخاصة فقط، ولا ترفع ملف `.env` إلى Git.
 - **المصادقة مطلوبة:** أول تشغيل ينشئ مستخدمًا افتراضيًا (`admin` / `admin123` أو قيم `AUTH_ADMIN_*`). غيّر `AUTH_SECRET` وكلمة المرور قبل الإنتاج.
 - الأدوار: `owner` | `manager` | `warehouse` | `kitchen` | `cashier` | `viewer`.
-- التطوير السريع المحلي يستخدم **PGlite** عبر `pnpm dev:api`. مع Docker Postgres: `pnpm dev:db` ثم `pnpm dev:api:pg`. الإنتاج يجب أن يكون **PostgreSQL**.
+- **Gia V3 (المحلي الموصى به):** من جذر المشروع شغّل `pnpm run dev:v3` للـ API و`pnpm run dev:web` للواجهة، أو انقر مرتين على `START-GIA-V3.bat`. قاعدة V3 الإنتاجية دائمًا: `<project-root>/.data/gia-v3` (مسار مطلق؛ لا يعتمد على `cwd`). لا تستخدم `pglite://.data/gia-v3` مع الاعتماد على مجلد `artifacts/api-server`.
+- التطوير القديم V2 يستخدم **PGlite** عبر `pnpm dev:api` (قاعدة `.data/gia-shawarma` القديمة). مع Docker Postgres: `pnpm dev:db` ثم `pnpm dev:api:pg`. الإنتاج يجب أن يكون **PostgreSQL**.
 - العملة الافتراضية هي الروبية الإندونيسية، والواجهة تدعم العربية وBahasa Indonesia مع RTL/LTR.
 - إذا كان السيرفر يستخدم نطاقًا فرعيًا أو مسارًا مختلفًا، ابنِ الواجهة مع `BASE_PATH` المطابق للمسار.

@@ -163,12 +163,20 @@ export function listV3Kitchen() {
     name: string;
     category: string;
     baseUnit: string;
+    displayUnit?: string;
     kitchenQty: number;
     lastTransferDate: string | null;
+    lastUpdated?: string | null;
+    unitNeedsReview?: boolean;
   }> }>("/kitchen");
 }
 
-export function createV3Item(body: { name: string; category?: string; baseUnit?: string }) {
+export function createV3Item(body: {
+  name: string;
+  category?: string;
+  baseUnit?: string;
+  minimumStock?: number | null;
+}) {
   return api<{ item?: { id: number }; id?: number }>("/warehouse/items", { method: "POST", body: JSON.stringify(body) });
 }
 
@@ -191,8 +199,103 @@ export function listV3Purchases(params: Record<string, string | number | undefin
   return api<{ rows: V3Purchase[]; total: number; page: number; pageSize: number }>(`/purchases?${q}`);
 }
 
+export type V3PurchaseCommit = {
+  committed: true;
+  idempotent?: boolean;
+  purchaseId: number;
+  inventoryItemId: number | null;
+  movementId: number | null;
+  destination: string;
+  quantityNumeric: number | null;
+  paymentStatus: string;
+  purchase: V3Purchase & Record<string, unknown>;
+};
+
+/** Reject ambiguous/partial API payloads so UI never shows fake success. */
+export function assertPurchaseCommitted(
+  raw: unknown,
+  expectedDestination?: string,
+): V3PurchaseCommit {
+  const r = raw as Partial<V3PurchaseCommit> | null;
+  const purchase = (r?.purchase ?? null) as (V3Purchase & Record<string, unknown>) | null;
+  const purchaseId = Number(r?.purchaseId ?? purchase?.id);
+  if (!Number.isFinite(purchaseId) || purchaseId <= 0) {
+    throw new Error("لم يتم تأكيد حفظ المشتريات من الخادم — لم يُرجع رقم المشتريات.");
+  }
+  const destination = String(r?.destination ?? purchase?.destination ?? "");
+  if (!destination) {
+    throw new Error("لم يتم تأكيد وجهة المشتريات من الخادم.");
+  }
+  if (expectedDestination && destination !== expectedDestination) {
+    throw new Error("وجهة المشتريات المحفوظة لا تطابق ما أُرسل.");
+  }
+  const inventoryItemIdRaw = r?.inventoryItemId ?? purchase?.inventoryItemId ?? null;
+  const inventoryItemId =
+    inventoryItemIdRaw == null || (typeof inventoryItemIdRaw === "string" && inventoryItemIdRaw === "")
+      ? null
+      : Number(inventoryItemIdRaw);
+  const movementIdRaw = r?.movementId ?? (purchase as { movementId?: number | null } | null)?.movementId ?? null;
+  const movementId =
+    movementIdRaw == null || (typeof movementIdRaw === "string" && movementIdRaw === "")
+      ? null
+      : Number(movementIdRaw);
+
+  if (destination === "WAREHOUSE" || destination === "KITCHEN_DIRECT") {
+    if (!(inventoryItemId != null && inventoryItemId > 0)) {
+      throw new Error("لم يتم تأكيد ربط مادة المخزون بعد الحفظ.");
+    }
+    if (!(movementId != null && movementId > 0)) {
+      throw new Error("لم يتم تأكيد حركة المخزون بعد الحفظ.");
+    }
+  }
+  if (destination === "CONSUMABLE" && movementId != null) {
+    throw new Error("استجابة غير متوقعة: مشتريات مستهلكات يجب ألا تُنشئ حركة مخزون.");
+  }
+
+  return {
+    committed: true,
+    idempotent: Boolean(r?.idempotent),
+    purchaseId,
+    inventoryItemId,
+    movementId,
+    destination,
+    quantityNumeric:
+      r?.quantityNumeric != null
+        ? Number(r.quantityNumeric)
+        : purchase?.quantityNumeric != null
+          ? Number(purchase.quantityNumeric)
+          : null,
+    paymentStatus: String(r?.paymentStatus ?? purchase?.paymentStatus ?? ""),
+    purchase: { ...(purchase || ({} as V3Purchase)), id: purchaseId, destination } as V3Purchase &
+      Record<string, unknown>,
+  };
+}
+
+export function assertWarehouseInCommitted(raw: unknown): {
+  movementId: number;
+  inventoryItemId: number;
+} {
+  const r = raw as { movement?: { id?: number; inventoryItemId?: number }; item?: { id?: number } } | null;
+  const movementId = Number(r?.movement?.id);
+  const inventoryItemId = Number(r?.movement?.inventoryItemId ?? r?.item?.id);
+  if (!Number.isFinite(movementId) || movementId <= 0) {
+    throw new Error("لم يتم تأكيد إدخال المستودع من الخادم.");
+  }
+  if (!Number.isFinite(inventoryItemId) || inventoryItemId <= 0) {
+    throw new Error("لم يتم تأكيد مادة المستودع من الخادم.");
+  }
+  return { movementId, inventoryItemId };
+}
+
 export function postV3Purchase(body: Record<string, unknown>) {
-  return api("/purchases", { method: "POST", body: JSON.stringify(body) });
+  return api<V3PurchaseCommit>("/purchases", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function patchV3Purchase(id: number, body: Record<string, unknown>) {
+  return api<{ committed?: boolean; purchaseId?: number; purchase?: V3Purchase }>(
+    `/purchases/${id}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
 }
 
 export function postV3PurchasePayment(id: number, body: Record<string, unknown>) {
@@ -407,7 +510,7 @@ export function paymentStatusLabel(s: string, lang: "ar" | "id") {
 }
 
 export function destinationLabel(s: string, lang: "ar" | "id") {
-  if (s === "WAREHOUSE") return lang === "id" ? "Gudang" : "المستودع";
-  if (s === "KITCHEN_DIRECT") return lang === "id" ? "Dapur langsung" : "المطبخ مباشرة";
-  return lang === "id" ? "Konsumsi" : "شراء عادي / مستهلك";
+  if (s === "WAREHOUSE") return lang === "id" ? "Ke gudang" : "للمستودع";
+  if (s === "KITCHEN_DIRECT") return lang === "id" ? "Ke dapur langsung" : "للمطبخ مباشرة";
+  return lang === "id" ? "Pembelian saja / konsumsi" : "مشتريات فقط / مستهلكات";
 }

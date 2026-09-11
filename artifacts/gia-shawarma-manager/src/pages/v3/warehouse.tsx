@@ -41,8 +41,8 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
       />
       <PageHint>
         {lang === "id"
-          ? "Saldo = Opening + Masuk − Keluar dapur. Angka tidak diedit manual. Item stok 0 tetap tampil."
-          : "الرصيد = رصيد الافتتاح + الداخل − الخارج للمطبخ. لا يُعدَّل يدوياً. الصنف يبقى ظاهراً حتى لو الرصيد 0."}
+          ? "Register bahan permanen. Saldo dihitung dari ledger (bukan edit manual). Stok 0 tetap tampil dan bisa dicari."
+          : "سجل مواد دائم. الرصيد من دفتر الحركات (لا تعديل يدوي). الصنف يبقى ظاهراً وقابلاً للبحث حتى لو الرصيد 0."}
       </PageHint>
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -72,7 +72,7 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
               <th className="px-3 py-3 text-start">{lang === "id" ? "Kategori" : "التصنيف"}</th>
               <th className="px-3 py-3 text-start">{lang === "id" ? "Bahan" : "المادة"}</th>
               <th className="px-3 py-3 text-start">{lang === "id" ? "Satuan" : "الوحدة"}</th>
-              <th className="px-3 py-3 text-start">{lang === "id" ? "Opening" : "رصيد الافتتاح"}</th>
+              <th className="px-3 py-3 text-start">{lang === "id" ? "Opening (riwayat)" : "افتتاح (تاريخي)"}</th>
               <th className="px-3 py-3 text-start">{lang === "id" ? "Total masuk" : "إجمالي الداخل"}</th>
               <th className="px-3 py-3 text-start">{lang === "id" ? "Keluar dapur" : "إجمالي الخارج للمطبخ"}</th>
               <th className="px-3 py-3 text-start">{lang === "id" ? "Saldo sekarang" : "الرصيد الحالي"}</th>

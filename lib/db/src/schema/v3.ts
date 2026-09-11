@@ -69,7 +69,8 @@ export const v3OpeningBalancesTable = pgTable("v3_opening_balances", {
 
 export const v3WarehouseMovementsTable = pgTable("v3_warehouse_movements", {
   id: serial("id").primaryKey(),
-  inventoryItemId: integer("inventory_item_id").notNull().references(() => v3InventoryItemsTable.id),
+  /** Nullable for KITCHEN_DIRECT_IN free-text purchases (no warehouse item). */
+  inventoryItemId: integer("inventory_item_id").references(() => v3InventoryItemsTable.id),
   /** OPENING | WAREHOUSE_IN | WAREHOUSE_TO_KITCHEN | ADJUSTMENT */
   movementType: text("movement_type").notNull(),
   quantityNumeric: numeric("quantity_numeric", { precision: 14, scale: 4, mode: "number" }),
@@ -140,6 +141,8 @@ export const v3PurchasesTable = pgTable("v3_purchases", {
   movementId: integer("movement_id"),
   actor: text("actor").notNull().default(""),
   userId: integer("user_id"),
+  /** Last editor (audit); create keeps actor as creator. */
+  updatedBy: text("updated_by"),
   /** active | voided */
   status: text("status").notNull().default("active"),
   voidedAt: timestamp("voided_at", { withTimezone: true }),

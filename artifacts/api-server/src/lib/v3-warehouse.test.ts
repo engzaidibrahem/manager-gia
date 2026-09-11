@@ -7,6 +7,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { eq } from "drizzle-orm";
+import { getDatabaseRuntimeInfo } from "@workspace/db";
+import { openFreshV3TestDatabase } from "./v3-test-harness";
 
 const ROOT = path.resolve("d:/gia-shawarma-manager-self-host");
 const TEST_DIR = path.resolve(ROOT, ".data/gia-v3-test");
@@ -21,41 +23,18 @@ describe("V3 Warehouse ledger", () => {
   let stockStatus: typeof import("../v3/warehouseService").stockStatus;
   let updateItemMinimum: typeof import("../v3/warehouseService").updateItemMinimum;
   let closeDatabase: typeof import("@workspace/db").closeDatabase;
-  let prodItemCountBefore = 0;
 
   before(async () => {
     process.chdir(ROOT);
-    // Force test DB BEFORE loading db module init
-    process.env.DATABASE_URL = "pglite://.data/gia-v3-test";
-    assert.equal(process.env.DATABASE_URL, "pglite://.data/gia-v3-test");
-
-    for (let i = 0; i < 5; i++) {
-      try {
-        if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true, force: true });
-        break;
-      } catch (err) {
-        if (i === 4) throw err;
-        await new Promise((r) => setTimeout(r, 250 * (i + 1)));
-      }
-    }
-
-    // Snapshot prod item count via a one-shot separate init is heavy;
-    // instead record directory mtime/file fingerprint after ensuring we never open it.
-    if (fs.existsSync(PROD_V3)) {
-      const marker = path.join(PROD_V3, ".test-guard-marker");
-      // Count via quick secondary process avoided — use SQL only on test DB.
-      // We'll compare prod counts with a dedicated script after suite.
-      void marker;
-    }
-
     const dbMod = await import("@workspace/db");
-    await dbMod.initDatabase();
+    await openFreshV3TestDatabase(dbMod);
+    assert.ok(fs.existsSync(TEST_DIR), "test DB dir must exist after init");
+    assert.equal(getDatabaseRuntimeInfo()?.kind, "v3-test");
+    assert.notEqual(path.resolve(TEST_DIR), path.resolve(PROD_V3));
+
     db = dbMod.db;
     v3InventoryItemsTable = dbMod.v3InventoryItemsTable;
     closeDatabase = dbMod.closeDatabase;
-
-    // Ensure we actually opened the test directory
-    assert.ok(fs.existsSync(TEST_DIR), "test DB dir must exist after init");
 
     const svc = await import("../v3/warehouseService");
     postOpeningBalance = svc.postOpeningBalance;

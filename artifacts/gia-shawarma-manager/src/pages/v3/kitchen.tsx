@@ -6,6 +6,22 @@ import { listV3Kitchen } from "@/lib/v3-api";
 import { type Lang } from "@/lib/i18n";
 import { EmptyState } from "./v3-ui";
 
+function formatKitchenQty(n: number): string {
+  // Western digits, trim useless trailing zeros
+  if (!Number.isFinite(n)) return "—";
+  const rounded = Math.round(n * 10000) / 10000;
+  return String(rounded);
+}
+
+/** Clean unit for Kitchen stock page — never use polluted baseUnit / raw qty text. */
+function kitchenUnitLabel(displayUnit?: string | null): string {
+  const preferred = String(displayUnit || "").trim();
+  if (!preferred) return "—";
+  // Reject any value that embeds a quantity (e.g. "3 كيلو", "2 kg")
+  if (/\d/.test(preferred)) return "—";
+  return preferred;
+}
+
 export function V3KitchenPage({ lang }: { lang: Lang }) {
   const [q, setQ] = useState("");
   const query = useQuery({ queryKey: ["v3-kitchen"], queryFn: listV3Kitchen });
@@ -22,13 +38,13 @@ export function V3KitchenPage({ lang }: { lang: Lang }) {
         eyebrow="GIA V3"
         title={lang === "id" ? "Dapur" : "المطبخ"}
         description={lang === "id"
-          ? "Stok dapur saja — bukan saldo gudang."
-          : "رصيد المطبخ فقط — وليس رصيد المستودع."}
+          ? "Saldo dapur saat ini (bukan daftar gerakan)."
+          : "رصيد المطبخ الحالي لكل مادة — وليس عدد الحركات."}
       />
       <PageHint>
         {lang === "id"
-          ? "Angka di sini adalah qty dapur. Gudang punya halaman sendiri."
-          : "الأرقام هنا كمية المطبخ الحالية. المستودع له صفحة منفصلة."}
+          ? "Satu angka = stok dapur sekarang. Riwayat gerakan ada di detail bahan."
+          : "رقم واحد = الرصيد الحالي في المطبخ. تفاصيل الحركات في صفحة المادة."}
       </PageHint>
 
       <div className="mb-3">
@@ -45,9 +61,9 @@ export function V3KitchenPage({ lang }: { lang: Lang }) {
           <thead className="bg-[hsl(var(--primary)/.08)] text-[11px] font-bold text-[hsl(var(--muted-foreground))]">
             <tr>
               <th className="px-3 py-3 text-start">{lang === "id" ? "Bahan" : "المادة"}</th>
-              <th className="px-3 py-3 text-start">{lang === "id" ? "Qty dapur" : "الكمية الحالية في المطبخ"}</th>
+              <th className="px-3 py-3 text-start">{lang === "id" ? "Saldo dapur" : "الرصيد في المطبخ"}</th>
               <th className="px-3 py-3 text-start">{lang === "id" ? "Satuan" : "الوحدة"}</th>
-              <th className="px-3 py-3 text-start">{lang === "id" ? "Masuk terakhir" : "آخر إدخال"}</th>
+              <th className="px-3 py-3 text-start">{lang === "id" ? "Update terakhir" : "آخر تحديث"}</th>
             </tr>
           </thead>
           <tbody>
@@ -57,14 +73,33 @@ export function V3KitchenPage({ lang }: { lang: Lang }) {
                   <EmptyState message={lang === "id" ? "Belum ada stok dapur." : "لا رصيد مطبخ بعد."} />
                 </td>
               </tr>
-            ) : rows.map((r) => (
-              <tr key={r.id} className="border-b border-[hsl(var(--border)/.5)]">
-                <td className="px-3 py-2.5 font-semibold">{r.name}</td>
-                <td className="px-3 py-2.5 font-mono text-lg font-bold text-[hsl(var(--primary))]">{r.kitchenQty}</td>
-                <td className="px-3 py-2.5">{r.baseUnit || "—"}</td>
-                <td className="px-3 py-2.5 font-mono text-xs">{r.lastTransferDate || "—"}</td>
-              </tr>
-            ))}
+            ) : rows.map((r) => {
+              const unit = kitchenUnitLabel(r.displayUnit);
+              return (
+                <tr key={r.id} className="border-b border-[hsl(var(--border)/.5)]">
+                  <td className="px-3 py-2.5 font-semibold">
+                    {r.name}
+                    {r.unitNeedsReview ? (
+                      <div className="mt-0.5 text-[11px] font-normal text-amber-800">
+                        {lang === "id"
+                          ? "Satuan historis perlu review"
+                          : "وحدة تاريخية تحتاج مراجعة"}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2.5 font-mono text-lg font-bold text-[hsl(var(--primary))] tabular-nums">
+                    {formatKitchenQty(r.kitchenQty)}
+                    {unit && unit !== "—" ? (
+                      <span className="ms-1 text-sm font-semibold text-[hsl(var(--foreground))]">{unit}</span>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2.5">{unit}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs tabular-nums">
+                    {r.lastUpdated || r.lastTransferDate || "—"}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

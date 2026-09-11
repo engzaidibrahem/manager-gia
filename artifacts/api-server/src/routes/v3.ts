@@ -18,6 +18,7 @@ import {
   createPurchase,
   listPurchasePayments,
   listPurchases,
+  updatePurchase,
   voidPurchase,
 } from "../v3/purchaseService";
 import {
@@ -295,6 +296,45 @@ router.post(
       userId: userIdOf(req),
     });
     res.status(result.idempotent ? 200 : 201).json(result);
+  }),
+);
+
+router.patch(
+  "/purchases/:id",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        purchaseDate: z.string().optional(),
+        purchaseTime: z.string().optional(),
+        itemName: z.string().min(1).optional(),
+        inventoryItemId: z.number().int().positive().nullable().optional(),
+        newItem: z
+          .object({
+            name: z.string().min(1),
+            category: z.string().optional(),
+            baseUnit: z.string().optional(),
+            minimumStock: z.number().nullable().optional(),
+          })
+          .nullable()
+          .optional(),
+        quantityNumeric: z.number().nullable().optional(),
+        quantityRaw: z.string().optional(),
+        unitRaw: z.string().optional(),
+        unitPrice: z.number().optional(),
+        totalAmount: z.number().optional(),
+        supplier: z.string().optional(),
+        purchasedBy: z.string().optional(),
+        destination: z.enum(["WAREHOUSE", "KITCHEN_DIRECT", "CONSUMABLE"]).optional(),
+        notes: z.string().nullable().optional(),
+      })
+      .parse(req.body);
+    const result = await updatePurchase({
+      purchaseId: Number(req.params.id),
+      ...body,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+    });
+    res.json(result);
   }),
 );
 

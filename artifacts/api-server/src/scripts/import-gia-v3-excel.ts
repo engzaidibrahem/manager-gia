@@ -327,6 +327,9 @@ async function main() {
       // also idempotent if opening movement exists
       const existingOpen = await findMovementByClient(openClient);
       if (existingOpen) {
+        if (existingOpen.inventoryItemId == null) {
+          throw new Error(`Opening movement ${existingOpen.id} missing inventory_item_id`);
+        }
         item = (await db.query.v3InventoryItemsTable.findFirst({
           where: eq(v3InventoryItemsTable.id, existingOpen.inventoryItemId),
         }))!;

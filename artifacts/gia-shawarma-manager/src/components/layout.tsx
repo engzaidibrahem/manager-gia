@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from 'react';
 import {
-  Boxes, ChevronRight, ClipboardList, Coffee, Globe2, Menu, PackageMinus, PackagePlus, ShieldCheck, ShoppingCart, Users, CalendarCheck, Wallet, X,
+  Boxes, ChevronRight, Coffee, Globe2, Menu, PackageMinus, PackagePlus, ShieldCheck, ShoppingCart, Users, CalendarCheck, Wallet, X,
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useT, type Lang } from '@/lib/i18n';
@@ -19,11 +19,8 @@ export function Shell({
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const t = useT(lang);
-  const role = user?.role ?? '';
-  const canOpeningBalance = role === 'owner' || role === 'manager';
   const nav: { href: string; label: string; icon: IconType }[] = [
     { href: '/warehouse', label: lang === 'id' ? 'Gudang' : 'المستودع', icon: Boxes },
-    ...(canOpeningBalance ? [{ href: '/opening', label: lang === 'id' ? 'Saldo awal' : 'رصيد الافتتاح', icon: ClipboardList }] : []),
     { href: '/warehouse-in', label: lang === 'id' ? 'Masuk gudang' : 'إدخال للمستودع', icon: PackagePlus },
     { href: '/warehouse-out', label: lang === 'id' ? 'Keluar dapur' : 'إخراج للمطبخ', icon: PackageMinus },
     { href: '/kitchen', label: lang === 'id' ? 'Dapur' : 'المطبخ', icon: Coffee },
@@ -70,7 +67,7 @@ export function Shell({
       <div className={`${lang === 'ar' ? 'md:mr-[248px]' : 'md:ml-[248px]'}`}>
         <header className="sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--background)/.88)] px-4 backdrop-blur-md md:px-8">
           <button onClick={() => setMobileOpen(true)} className="rounded-xl border border-[hsl(var(--border))] p-2 md:hidden"><Menu size={19} /></button>
-          <div className="hidden text-xs text-[hsl(var(--muted-foreground))] md:block"><span className="font-mono">{new Intl.DateTimeFormat(lang === 'id' ? 'id-ID' : 'ar-SA', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</span></div>
+          <div className="hidden text-xs text-[hsl(var(--muted-foreground))] md:block"><span className="font-mono">{new Intl.DateTimeFormat(lang === 'id' ? 'id-ID' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', numberingSystem: 'latn' }).format(new Date())}</span></div>
           <div className="ml-auto flex items-center gap-2">
             {user ? (
               <div className="hidden items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-[11px] font-semibold md:flex">

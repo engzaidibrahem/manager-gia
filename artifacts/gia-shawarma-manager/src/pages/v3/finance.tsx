@@ -68,12 +68,13 @@ export function V3FinancePage({ lang }: { lang: Lang }) {
         </div>
       </div>
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Metric label={lang === "id" ? "Modal" : "رأس المال"} value={formatIDR(s?.netCapital ?? 0)} />
         <Metric label={lang === "id" ? "Pemasukan" : "الدخل"} value={formatIDR(s?.totalIncome ?? 0)} />
         <Metric label={lang === "id" ? "Pengeluaran" : "المصروفات"} value={formatIDR(s?.totalExpenses ?? 0)} />
-        <Metric label={lang === "id" ? "Bayar pembelian" : "المشتريات المدفوعة"} value={formatIDR(s?.totalPurchasePayments ?? 0)} />
-        <Metric label={lang === "id" ? "Gaji dibayar" : "الرواتب المدفوعة"} value={formatIDR(s?.totalSalaryPayments ?? 0)} />
+        <Metric label={lang === "id" ? "Bayar pembelian" : "مدفوعات المشتريات"} value={formatIDR(s?.totalPurchasePayments ?? 0)} />
+        <Metric label={lang === "id" ? "Bayar gaji" : "مدفوعات الرواتب"} value={formatIDR(s?.totalSalaryPayments ?? 0)} />
+        <Metric label={lang === "id" ? "Saldo tersedia" : "الرصيد المتاح"} value={formatIDR(s?.available ?? 0)} />
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">

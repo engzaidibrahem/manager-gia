@@ -3,49 +3,17 @@
  * Also verifies persistence after close/reopen of DB.
  */
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { eq } from "drizzle-orm";
+import { getDatabaseRuntimeInfo } from "@workspace/db";
+import { installV3TestEnv, openFreshV3TestDatabase, writeIsolationGuard } from "./v3-test-harness";
 
 const ROOT = path.resolve("d:/gia-shawarma-manager-self-host");
-const TEST_DIR = path.resolve(ROOT, ".data/gia-v3-test");
 const GUARD = path.resolve(ROOT, "backups/gia-v3-phase8-prod-guard.json");
-
-async function countTable(db: typeof import("@workspace/db").db, table: string): Promise<number> {
-  const { sql } = await import("drizzle-orm");
-  try {
-    const res = await db.execute(sql.raw(`SELECT count(*)::int AS c FROM ${table}`));
-    const r = res as unknown as { rows?: { c: number }[] } | { c: number }[];
-    if (Array.isArray(r)) return Number(r[0]?.c ?? 0);
-    return Number(r.rows?.[0]?.c ?? 0);
-  } catch {
-    return -1;
-  }
-}
-
-async function snapshotProd(dbMod: typeof import("@workspace/db")) {
-  const tables = [
-    "v3_inventory_items",
-    "v3_warehouse_movements",
-    "v3_purchases",
-    "v3_purchase_payments",
-    "v3_capital_transactions",
-    "v3_income",
-    "v3_expenses",
-    "v3_employees",
-    "v3_attendance",
-    "v3_payroll",
-    "v3_salary_payments",
-  ];
-  const out: Record<string, number> = {};
-  for (const t of tables) out[t] = await countTable(dbMod.db, t);
-  return out;
-}
 
 describe("V3 Phase 8 full restaurant E2E", () => {
   let dbMod: typeof import("@workspace/db");
-  let prodBefore: Record<string, number>;
   let chickenId: number;
   let empId: number;
   let purchaseId: number;
@@ -53,37 +21,15 @@ describe("V3 Phase 8 full restaurant E2E", () => {
 
   before(async () => {
     process.chdir(ROOT);
-    process.env.DATABASE_URL = "pglite://.data/gia-v3";
     dbMod = await import("@workspace/db");
-    try { await dbMod.closeDatabase(); } catch { /* */ }
-    await dbMod.initDatabase();
-    prodBefore = await snapshotProd(dbMod);
-    fs.writeFileSync(GUARD, JSON.stringify({ before: prodBefore }, null, 2), "utf8");
-    await dbMod.closeDatabase();
-
-    process.env.DATABASE_URL = "pglite://.data/gia-v3-test";
-    for (let i = 0; i < 5; i++) {
-      try {
-        if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true, force: true });
-        break;
-      } catch (err) {
-        if (i === 4) throw err;
-        await new Promise((r) => setTimeout(r, 250 * (i + 1)));
-      }
-    }
-    await dbMod.initDatabase();
+    await openFreshV3TestDatabase(dbMod);
+    assert.equal(getDatabaseRuntimeInfo()?.kind, "v3-test");
+    writeIsolationGuard(GUARD, { suite: "phase8-e2e" });
   });
 
   after(async () => {
-    await dbMod.closeDatabase();
-    process.env.DATABASE_URL = "pglite://.data/gia-v3";
-    await dbMod.initDatabase();
-    const afterCounts = await snapshotProd(dbMod);
-    fs.writeFileSync(GUARD, JSON.stringify({ before: prodBefore, after: afterCounts }, null, 2), "utf8");
-    for (const k of Object.keys(prodBefore)) {
-      assert.equal(afterCounts[k], prodBefore[k], `prod ${k} must not change`);
-    }
-    await dbMod.closeDatabase();
+    try { await dbMod.closeDatabase(); } catch { /* */ }
+    writeIsolationGuard(GUARD, { suite: "phase8-e2e", closed: true });
   });
 
   it("runs complete restaurant money + stock scenario", async () => {

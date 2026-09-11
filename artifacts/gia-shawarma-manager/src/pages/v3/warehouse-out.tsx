@@ -87,7 +87,7 @@ export function V3WarehouseOutPage({ lang }: { lang: Lang }) {
         eyebrow="GIA V3"
         title={lang === "id" ? "Keluar ke Dapur" : "إخراج للمطبخ"}
         description={lang === "id" ? "Kurangi gudang, tambah dapur. Item tidak dihapus saat 0." : "ينقص المستودع ويزيد المطبخ. الصنف لا يُحذف عند الصفر."}
-        action={<PrimaryButton onClick={() => setOpen(true)}>{lang === "id" ? "+ Keluar dapur" : "+ إخراج للمطبخ"}</PrimaryButton>}
+        action={<PrimaryButton type="button" onClick={() => setOpen(true)}>{lang === "id" ? "+ Keluar dapur" : "+ إخراج للمطبخ"}</PrimaryButton>}
       />
       <PageHint>
         {lang === "id"

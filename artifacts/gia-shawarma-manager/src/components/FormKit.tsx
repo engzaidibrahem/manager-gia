@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import { createPortal } from 'react-dom';
 import { cn, inputClass, readOnlyFieldClass } from '@/lib/utils';
 
 export function FormSection({
@@ -59,13 +60,28 @@ export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(inputClass, props.className)} />;
 }
 
-export function NumberInput(props: InputHTMLAttributes<HTMLInputElement>) {
+export function NumberInput({
+  onChange,
+  className,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      type={props.type ?? 'number'}
+      type={props.type ?? 'text'}
       inputMode={props.inputMode ?? 'decimal'}
-      className={cn(inputClass, 'font-mono tabular-nums', props.className)}
+      lang="en"
+      dir="ltr"
+      className={cn(inputClass, 'font-mono tabular-nums text-start', className)}
+      onChange={(e) => {
+        const western = e.target.value
+          .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+          .replace(/[\u06f0-\u06f9]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
+        if (western !== e.target.value) {
+          e.target.value = western;
+        }
+        onChange?.(e);
+      }}
     />
   );
 }
@@ -144,16 +160,36 @@ export function Modal({
   onClose: () => void;
   wide?: boolean;
 }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 sm:items-center" role="dialog" aria-modal="true">
-      <div className={cn('max-h-[92vh] w-full overflow-auto rounded-2xl bg-[hsl(var(--card))] p-4 shadow-xl md:p-5', wide ? 'max-w-2xl' : 'max-w-lg')}>
-        <div className="mb-4 flex items-center justify-between gap-2">
+  // Portal to body: page wrappers use `.fade-up` animation with `transform`, which
+  // turns `position:fixed` into a local containing-block and makes dialogs look like
+  // the Add button "does nothing".
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-3 sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className={cn(
+          'flex max-h-[92vh] w-full flex-col overflow-hidden rounded-2xl bg-[hsl(var(--card))] shadow-xl',
+          wide ? 'max-w-2xl' : 'max-w-lg',
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[hsl(var(--border)/.6)] px-4 py-3 md:px-5">
           <h2 className="text-sm font-bold">{title}</h2>
-          <SecondaryButton onClick={onClose} className="px-3 py-1.5">×</SecondaryButton>
+          <SecondaryButton type="button" onClick={onClose} className="px-3 py-1.5">
+            ×
+          </SecondaryButton>
         </div>
-        {children}
+        <div className="min-h-0 flex-1 overflow-auto p-4 md:p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
