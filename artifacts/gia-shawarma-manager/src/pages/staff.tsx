@@ -42,26 +42,32 @@ export function StaffPage({ lang }: { lang: Lang }) {
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState('');
 
-  const buildEmpRows = useCallback(() => [
-    ...employees.map((e) => ({
+  const buildEmpRows = useCallback((): EmployeeRow[] => [
+    ...employees.map((e): EmployeeRow => ({
       _key: `e-${e.id}`, id: e.id, fullName: e.fullName, role: e.role, phone: e.phone ?? '',
       startDate: e.startDate, status: e.status, notes: e.notes ?? '',
     })),
     ...emptyRows(Math.max(0, 6 - employees.length), blankEmployee),
   ], [employees]);
 
-  const buildAttRows = useCallback(() => [
-    ...attendance.map((a) => ({
-      _key: `a-${a.id}`, id: a.id, employeeId: String(a.employeeId), attendanceDate: a.attendanceDate,
-      checkIn: a.checkIn, checkOut: a.checkOut ?? '', status: a.status, notes: a.notes ?? '',
+  const buildAttRows = useCallback((): AttendanceRow[] => [
+    ...attendance.map((a): AttendanceRow => ({
+      _key: `a-${a.id}`,
+      id: a.id,
+      employeeId: String(a.employeeId),
+      attendanceDate: a.attendanceDate,
+      checkIn: a.checkIn ?? '',
+      checkOut: a.checkOut ?? '',
+      status: a.status,
+      notes: a.notes ?? '',
     })),
-    ...emptyRows(Math.max(0, 10 - attendance.length), () => blankAttendance(date, String(employees[0]?.id ?? '0'))),
+    ...emptyRows(Math.max(0, 8 - attendance.length), () => blankAttendance(date, employees[0] ? String(employees[0].id) : '0')),
   ], [attendance, date, employees]);
 
-  const { rows: empRows, setRows: setEmpRows, markDirty: markEmpDirty, markClean: markEmpClean } = useGridSync(
+  const { rows: empRows, setRows: setEmpRows, markDirty: markEmpDirty, markClean: markEmpClean } = useGridSync<EmployeeRow>(
     employeesQuery.dataUpdatedAt, employeesQuery.isFetched, buildEmpRows,
   );
-  const { rows: attRows, setRows: setAttRows, markDirty: markAttDirty, markClean: markAttClean } = useGridSync(
+  const { rows: attRows, setRows: setAttRows, markDirty: markAttDirty, markClean: markAttClean } = useGridSync<AttendanceRow>(
     `${date}-${attendanceQuery.dataUpdatedAt}`, attendanceQuery.isFetched, buildAttRows,
   );
 
@@ -100,11 +106,23 @@ export function StaffPage({ lang }: { lang: Lang }) {
   const handleSaveAll = async () => {
     setSaving(true);
     try {
-      const empPayload = empRows.filter((r) => r.fullName.trim()).map(({ _key, _selected, ...rest }) => ({
-        ...rest, status: rest.status as 'active' | 'inactive',
+      const empPayload = empRows.filter((r) => r.fullName.trim()).map((r) => ({
+        id: r.id,
+        fullName: r.fullName,
+        role: r.role,
+        phone: r.phone,
+        startDate: r.startDate,
+        status: r.status as 'active' | 'inactive',
+        notes: r.notes,
       }));
-      const attPayload = attRows.filter((r) => r.employeeId !== '0' && r.checkIn).map(({ _key, _selected, ...rest }) => ({
-        ...rest, employeeId: Number(rest.employeeId), status: rest.status as 'present' | 'late' | 'absent' | 'leave',
+      const attPayload = attRows.filter((r) => r.employeeId !== '0' && r.checkIn).map((r) => ({
+        id: r.id,
+        employeeId: Number(r.employeeId),
+        attendanceDate: r.attendanceDate,
+        checkIn: r.checkIn,
+        checkOut: r.checkOut,
+        status: r.status as 'present' | 'late' | 'absent' | 'leave',
+        notes: r.notes,
       }));
       await Promise.all([bulkSaveEmployees(empPayload, delEmp), bulkSaveAttendance(attPayload, delAtt)]);
       setDelEmp([]); setDelAtt([]);

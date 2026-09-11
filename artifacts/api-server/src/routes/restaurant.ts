@@ -9,7 +9,6 @@ import {
   incomeTable,
   inventoryItemsTable,
   inventoryMovementsTable,
-  recipeLinesTable,
   wasteRecordsTable,
 } from "@workspace/db";
 import {
@@ -69,6 +68,7 @@ const serializeItem = (item: typeof inventoryItemsTable.$inferSelect) => ({
   brand: item.brand ?? "",
   variant: item.variant ?? "",
   qrToken: item.qrToken || "",
+  archivedAt: item.archivedAt ? iso(item.archivedAt) : null,
   updatedAt: iso(item.updatedAt),
 });
 
@@ -106,18 +106,24 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const date = parsed.data.date ?? new Date().toISOString().slice(0, 10);
   const [incomeResult, expenseResult, purchaseResult, lowStockResult, kitchenResult, attendanceResult, wasteResult] =
     await Promise.all([
-      db.select({ total: sql<number>`coalesce(sum(${incomeTable.amount}), 0)` }).from(incomeTable).where(eq(incomeTable.incomeDate, date)),
-      db.select({ total: sql<number>`coalesce(sum(${expensesTable.amount}), 0)` }).from(expensesTable).where(eq(expensesTable.expenseDate, date)),
+      db.select({ total: sql<number>`coalesce(sum(${incomeTable.amount}), 0)` }).from(incomeTable).where(and(eq(incomeTable.incomeDate, date), eq(incomeTable.status, "active"))),
+      db.select({ total: sql<number>`coalesce(sum(${expensesTable.amount}), 0)` }).from(expensesTable).where(and(eq(expensesTable.expenseDate, date), eq(expensesTable.status, "active"))),
       db.select({ total: sql<number>`coalesce(sum(${dailyPurchasesTable.totalAmount}), 0)`, count: sql<number>`count(*)` }).from(dailyPurchasesTable).where(eq(dailyPurchasesTable.purchaseDate, date)),
-      db.select({ count: sql<number>`count(*)` }).from(inventoryItemsTable).where(sql`${inventoryItemsTable.currentStock} <= ${inventoryItemsTable.minimumStock}`),
-      db.select({ count: sql<number>`count(*)` }).from(inventoryMovementsTable).where(and(eq(inventoryMovementsTable.type, "kitchen"), sql`${inventoryMovementsTable.createdAt}::date = ${date}`)),
+      db.select({ count: sql<number>`count(*)` }).from(inventoryItemsTable).where(sql`${inventoryItemsTable.archivedAt} IS NULL AND ${inventoryItemsTable.currentStock} <= ${inventoryItemsTable.minimumStock}`),
+      db.select({ count: sql<number>`count(*)` }).from(inventoryMovementsTable).where(and(
+        sql`(
+          ${inventoryMovementsTable.type} = 'kitchen'
+          OR (${inventoryMovementsTable.type} = 'transfer' AND ${inventoryMovementsTable.location} = 'kitchen')
+        )`,
+        sql`${inventoryMovementsTable.createdAt}::date = ${date}`,
+      )),
       db.select({ count: sql<number>`count(*)` }).from(attendanceTable).where(eq(attendanceTable.attendanceDate, date)),
       db.select({ total: sql<number>`coalesce(sum(${wasteRecordsTable.costEstimate}), 0)` }).from(wasteRecordsTable).where(eq(wasteRecordsTable.wasteDate, date)),
     ]);
 
   const [recentExpenses, recentIncome, recentMovements, recentPurchases] = await Promise.all([
-    db.select().from(expensesTable).where(eq(expensesTable.expenseDate, date)).orderBy(desc(expensesTable.createdAt)).limit(3),
-    db.select().from(incomeTable).where(eq(incomeTable.incomeDate, date)).orderBy(desc(incomeTable.createdAt)).limit(3),
+    db.select().from(expensesTable).where(and(eq(expensesTable.expenseDate, date), eq(expensesTable.status, "active"))).orderBy(desc(expensesTable.createdAt)).limit(3),
+    db.select().from(incomeTable).where(and(eq(incomeTable.incomeDate, date), eq(incomeTable.status, "active"))).orderBy(desc(incomeTable.createdAt)).limit(3),
     db.select({ movement: inventoryMovementsTable, itemName: inventoryItemsTable.name }).from(inventoryMovementsTable)
       .innerJoin(inventoryItemsTable, eq(inventoryMovementsTable.itemId, inventoryItemsTable.id))
       .where(sql`${inventoryMovementsTable.createdAt}::date = ${date}`)
@@ -143,7 +149,9 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     ...recentMovements.map(({ movement, itemName }) => ({
       id: `movement-${movement.id}`,
       kind: movement.type,
-      title: movement.type === "kitchen" ? "إخراج للمطبخ" : "حركة مستودع",
+      title: movement.type === "kitchen" || (movement.type === "transfer" && movement.location === "kitchen")
+        ? "إخراج للمطبخ"
+        : "حركة مستودع",
       detail: `${itemName} • ${movement.quantity} ${movement.type}`,
       createdAt: iso(movement.createdAt),
     })),
@@ -156,10 +164,14 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     })),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8);
 
+  const { getAvailableCapitalSummary } = await import("../services/capitalService");
+  const operational = await getAvailableCapitalSummary();
+
   res.json({
     date,
     totalIncome: Number(incomeResult[0]?.total ?? 0),
     totalExpenses: Number(expenseResult[0]?.total ?? 0),
+    /** Day income − day expenses (daily cash book). Not Available Capital. */
     netCash: Number(incomeResult[0]?.total ?? 0) - Number(expenseResult[0]?.total ?? 0),
     lowStockCount: Number(lowStockResult[0]?.count ?? 0),
     kitchenMovements: Number(kitchenResult[0]?.count ?? 0),
@@ -168,6 +180,14 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     purchaseCount: Number(purchaseResult[0]?.count ?? 0),
     wasteCost: Number(wasteResult[0]?.total ?? 0),
     recentActivity: activities,
+    totalInitialCapital: operational.totalInitialCapital,
+    totalAdditionalCapital: operational.totalAdditionalCapital,
+    totalCapital: operational.totalCapital,
+    allTimeIncome: operational.totalIncome,
+    allTimeExpenses: operational.totalExpenses,
+    totalPurchasePayments: operational.totalPurchasePayments,
+    availableCapital: operational.availableCapital,
+    operationalBalance: operational.availableCapital,
   });
 });
 
@@ -184,6 +204,8 @@ router.get("/inventory/items", async (req, res): Promise<void> => {
   if (parsed.data.lowStockOnly) {
     filters.push(sql`${inventoryItemsTable.currentStock} <= ${inventoryItemsTable.minimumStock}`);
   }
+  // Soft-archived items excluded from operational lists (history still joins by id)
+  filters.push(sql`${inventoryItemsTable.archivedAt} IS NULL`);
   const items = await db.select().from(inventoryItemsTable)
     .where(filters.length ? and(...filters) : undefined)
     .orderBy(asc(inventoryItemsTable.category), asc(inventoryItemsTable.name));
@@ -198,7 +220,8 @@ router.post("/inventory/items", async (req, res): Promise<void> => {
   }
   const [item] = await db.insert(inventoryItemsTable).values({
     ...parsed.data,
-    kitchenStock: (parsed.data as { kitchenStock?: number }).kitchenStock ?? 0,
+    currentStock: 0,
+    kitchenStock: 0,
     costPerUnit: parsed.data.costPerUnit ?? 0,
     qrToken: `gia-${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`,
   }).returning();
@@ -216,8 +239,10 @@ router.patch("/inventory/items/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const { currentStock: _cs, kitchenStock: _ks, ...safe } = parsed.data as Record<string, unknown>;
+  void _cs; void _ks;
   const [item] = await db.update(inventoryItemsTable)
-    .set({ ...parsed.data, updatedAt: new Date() })
+    .set({ ...safe, updatedAt: new Date() })
     .where(eq(inventoryItemsTable.id, params.data.id))
     .returning();
   if (!item) {
@@ -233,18 +258,19 @@ router.delete("/inventory/items/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const item = await db.query.inventoryItemsTable.findFirst({ where: eq(inventoryItemsTable.id, params.data.id) });
-  if (!item) {
-    res.status(404).json({ error: "Inventory item not found" });
-    return;
+  try {
+    const { archiveItems } = await import("../services/inventoryService");
+    const archived = await db.transaction(async (tx) => archiveItems(tx, [params.data.id]));
+    if (!archived.length) {
+      res.status(404).json({ error: "Inventory item not found" });
+      return;
+    }
+    res.status(200).json(serializeItem(archived[0]!));
+  } catch (error) {
+    const { toErrorResponse } = await import("../lib/errors");
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
   }
-  await db.transaction(async (tx) => {
-    await tx.delete(recipeLinesTable).where(eq(recipeLinesTable.inventoryItemId, params.data.id));
-    await tx.delete(wasteRecordsTable).where(eq(wasteRecordsTable.inventoryItemId, params.data.id));
-    await tx.delete(inventoryMovementsTable).where(eq(inventoryMovementsTable.itemId, params.data.id));
-    await tx.delete(inventoryItemsTable).where(eq(inventoryItemsTable.id, params.data.id));
-  });
-  res.status(204).send();
 });
 
 router.get("/inventory/movements", async (req, res): Promise<void> => {
@@ -271,32 +297,45 @@ router.post("/inventory/movements", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const item = await db.query.inventoryItemsTable.findFirst({ where: eq(inventoryItemsTable.id, parsed.data.itemId) });
-  if (!item) {
-    res.status(404).json({ error: "Inventory item not found" });
-    return;
-  }
-  const isKitchen = parsed.data.type === "kitchen";
-  const location = isKitchen ? "kitchen" : "warehouse";
-  const delta = parsed.data.type === "in" || parsed.data.type === "adjustment" ? parsed.data.quantity : -parsed.data.quantity;
-  const stockField = isKitchen ? item.kitchenStock : item.currentStock;
-  if (stockField + delta < 0) {
-    res.status(400).json({ error: isKitchen ? "Kitchen stock would go negative" : "Warehouse stock would go negative" });
-    return;
-  }
   try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { adjustStock } = await import("../services/inventoryService");
+    const { receiveIntoWarehouse } = await import("../services/receivingService");
+
+    const item = await db.query.inventoryItemsTable.findFirst({ where: eq(inventoryItemsTable.id, parsed.data.itemId) });
+    if (!item) {
+      res.status(404).json({ error: "Inventory item not found" });
+      return;
+    }
+    if ((parsed.data.type as string) === "transfer") {
+      res.status(400).json({ error: "Use POST /inventory/transfers for transfers" });
+      return;
+    }
+    const isKitchen = parsed.data.type === "kitchen";
+    const location = isKitchen ? "kitchen" : "warehouse";
+    const actor = actorFrom(req, parsed.data.actor);
+
     const movement = await db.transaction(async (tx) => {
-      const [created] = await tx.insert(inventoryMovementsTable).values({
-        ...parsed.data,
+      if (parsed.data.type === "in") {
+        const received = await receiveIntoWarehouse({
+          itemId: item.id,
+          quantity: parsed.data.quantity,
+          note: parsed.data.note,
+          actor,
+          userId: req.user?.id ?? null,
+        }, tx);
+        return received.movement;
+      }
+      const signedQty = parsed.data.type === "adjustment" ? parsed.data.quantity : -parsed.data.quantity;
+      const result = await adjustStock(tx, {
+        itemId: item.id,
         location,
-      }).returning();
-      await tx.update(inventoryItemsTable).set({
-        ...(isKitchen
-          ? { kitchenStock: item.kitchenStock + delta }
-          : { currentStock: item.currentStock + delta }),
-        updatedAt: new Date(),
-      }).where(eq(inventoryItemsTable.id, item.id));
-      return created;
+        quantity: signedQty,
+        note: parsed.data.note ?? parsed.data.type,
+        actor,
+        userId: req.user?.id ?? null,
+      });
+      return result.movement;
     });
     res.status(201).json(serializeMovement({
       ...movement,
@@ -304,7 +343,9 @@ router.post("/inventory/movements", async (req, res): Promise<void> => {
       unit: item.unit,
     }));
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Movement failed" });
+    const { toErrorResponse } = await import("../lib/errors");
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
   }
 });
 
@@ -314,22 +355,37 @@ router.get("/finance/expenses", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const filters = [eq(expensesTable.status, "active")];
+  if (parsed.data.date) filters.push(eq(expensesTable.expenseDate, parsed.data.date));
   const rows = await db.select().from(expensesTable)
-    .where(parsed.data.date ? eq(expensesTable.expenseDate, parsed.data.date) : undefined)
+    .where(and(...filters))
     .orderBy(desc(expensesTable.expenseDate), desc(expensesTable.createdAt))
     .limit(parsed.data.limit ?? 50);
   res.json(ListExpensesResponse.parse(rows.map(serializeExpense)));
 });
 
 router.post("/finance/expenses", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, unknown>;
+  if (body.actor != null || body.actorId != null) {
+    res.status(400).json({
+      error: "Do not send actor identity; the server uses the authenticated session.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
   const parsed = CreateExpenseBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const { actorFrom } = await import("../auth/middleware");
+  const { assertExpenseNotPurchaseDuplicate } = await import("../services/purchasePaymentService");
+  assertExpenseNotPurchaseDuplicate(parsed.data.category, parsed.data.description);
   const [row] = await db.insert(expensesTable).values({
     ...parsed.data,
     expenseTime: parsed.data.expenseTime ?? "",
+    paidBy: actorFrom(req),
+    status: "active",
   }).returning();
   res.status(201).json(CreateExpenseResponse.parse(serializeExpense(row)));
 });
@@ -345,8 +401,9 @@ router.patch("/finance/expenses/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const { paidBy: _paidBy, ...safe } = parsed.data as typeof parsed.data & { paidBy?: string };
   const [row] = await db.update(expensesTable)
-    .set(parsed.data)
+    .set(safe)
     .where(eq(expensesTable.id, params.data.id))
     .returning();
   if (!row) {
@@ -362,12 +419,16 @@ router.delete("/finance/expenses/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [row] = await db.delete(expensesTable).where(eq(expensesTable.id, params.data.id)).returning();
-  if (!row) {
-    res.status(404).json({ error: "Expense not found" });
-    return;
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { voidExpense } = await import("../services/capitalService");
+    await voidExpense(params.data.id, actorFrom(req));
+    res.status(204).send();
+  } catch (error) {
+    const { toErrorResponse } = await import("../lib/errors");
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
   }
-  res.status(204).send();
 });
 
 router.get("/finance/income", async (req, res): Promise<void> => {
@@ -376,22 +437,35 @@ router.get("/finance/income", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const filters = [eq(incomeTable.status, "active")];
+  if (parsed.data.date) filters.push(eq(incomeTable.incomeDate, parsed.data.date));
   const rows = await db.select().from(incomeTable)
-    .where(parsed.data.date ? eq(incomeTable.incomeDate, parsed.data.date) : undefined)
+    .where(and(...filters))
     .orderBy(desc(incomeTable.incomeDate), desc(incomeTable.createdAt))
     .limit(parsed.data.limit ?? 50);
   res.json(ListIncomeResponse.parse(rows.map(serializeIncome)));
 });
 
 router.post("/finance/income", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, unknown>;
+  if (body.actor != null || body.actorId != null) {
+    res.status(400).json({
+      error: "Do not send actor identity; the server uses the authenticated session.",
+      code: "VALIDATION_ERROR",
+    });
+    return;
+  }
   const parsed = CreateIncomeBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const { actorFrom } = await import("../auth/middleware");
   const [row] = await db.insert(incomeTable).values({
     ...parsed.data,
     incomeTime: parsed.data.incomeTime ?? "",
+    recordedBy: actorFrom(req),
+    status: "active",
   }).returning();
   res.status(201).json(CreateIncomeResponse.parse(serializeIncome(row)));
 });
@@ -407,8 +481,9 @@ router.patch("/finance/income/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const { recordedBy: _recordedBy, ...safe } = parsed.data as typeof parsed.data & { recordedBy?: string };
   const [row] = await db.update(incomeTable)
-    .set(parsed.data)
+    .set(safe)
     .where(eq(incomeTable.id, params.data.id))
     .returning();
   if (!row) {
@@ -424,12 +499,16 @@ router.delete("/finance/income/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [row] = await db.delete(incomeTable).where(eq(incomeTable.id, params.data.id)).returning();
-  if (!row) {
-    res.status(404).json({ error: "Income not found" });
-    return;
+  try {
+    const { actorFrom } = await import("../auth/middleware");
+    const { voidIncome } = await import("../services/capitalService");
+    await voidIncome(params.data.id, actorFrom(req));
+    res.status(204).send();
+  } catch (error) {
+    const { toErrorResponse } = await import("../lib/errors");
+    const mapped = toErrorResponse(error);
+    res.status(mapped.status).json(mapped.body);
   }
-  res.status(204).send();
 });
 
 router.get("/staff/employees", async (_req, res): Promise<void> => {

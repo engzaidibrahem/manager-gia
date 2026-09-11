@@ -8,9 +8,13 @@
     "types": ["node"]
   },
   "include": ["src"],
+  "exclude": ["src/**/*.test.ts"],
   "references": [
     {
       "path": "../../lib/db"
+    },
+    {
+      "path": "../../lib/inventory-math"
     },
     {
       "path": "../../lib/api-zod"

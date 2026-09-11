@@ -1,0 +1,141 @@
+﻿excel_row,row_class,category,item_name_raw,unit_raw,opening_raw,opening_numeric,inbound,outbound,current_raw,current_numeric,computable_current,current_status,minimum,status_excel,class_reason
+3,REAL_ITEM,أدوات المطبخ,مقالية تيفال,عدد,2,2,0,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+4,REAL_ITEM,أدوات المطبخ,ابريق بالستيك,عدد,2,2,0,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+5,REAL_ITEM,أدوات المطبخ,طناجر صغيرة,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+6,REAL_ITEM,أدوات المطبخ,سوسيرة بالستيك,عدد,4,4,0,0,4,4,4,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+7,REAL_ITEM,أدوات المطبخ,سطل كبير,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+8,REAL_ITEM,أدوات المطبخ,طنجرة ستالس كبيرة,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+9,REAL_ITEM,أدوات المطبخ,مكيال بالستيك,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+10,REAL_ITEM,أدوات المطبخ,ممسحة شيف خرقة ) (,عدد,6,6,0,0,6,6,6,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+11,REAL_ITEM,أدوات المطبخ,معالق طعام,عدد,10,10,0,0,10,10,10,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+12,REAL_ITEM,أدوات المطبخ,دفات تقطيع كبيرة,عدد,2,2,0,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+13,REAL_ITEM,أدوات المطبخ,دفات تقطيع,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+14,REAL_ITEM,أدوات المطبخ,وزرة جلي,عدد,2,2,0,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+15,REAL_ITEM,أدوات المطبخ,مصافي صغيرة,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+16,REAL_ITEM,أدوات المطبخ,كف للفرن,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+17,REAL_ITEM,أدوات المطبخ,سكوار طاسة,عدد,8,8,0,0,8,8,8,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+18,REAL_ITEM,أدوات المطبخ,سكوار ميونيز,عدد,4,4,0,0,4,4,4,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+19,REAL_ITEM,أدوات المطبخ,غطاء سكوار ميونيز,عدد,2,2,0,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+20,REAL_ITEM,أدوات المطبخ,سكوار انتر,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+21,REAL_ITEM,أدوات المطبخ,غطاء سكوار انتر,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+22,REAL_ITEM,أدوات المطبخ,تربيعة ستالس,عدد,2,2,0,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+23,REAL_ITEM,أدوات المطبخ,جاط ستالس كبير,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+24,REAL_ITEM,أدوات المطبخ,جاط ستالس صغير,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+25,REAL_ITEM,أدوات المطبخ,مصافي جاط ستالس,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+26,REAL_ITEM,أدوات المطبخ,معلقة نشا كبيرة خشب,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+27,REAL_ITEM,أدوات المطبخ,برميل للنشا مع غطاء,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+28,REAL_ITEM,أدوات المطبخ,مطربان بهارات كبير,عدد,4,4,0,0,4,4,4,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+29,REAL_ITEM,أدوات المطبخ,مصافي انتر كبير,عدد,2,2,0,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+30,REAL_ITEM,أدوات المطبخ,مشاحف,عدد,5,5,0,0,5,5,5,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+31,REAL_ITEM,أدوات المطبخ,قطاعة صندويش شاورما,عدد,2,2,0,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+32,REAL_ITEM,أدوات المطبخ,مضرب خلط كبير,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+33,REAL_ITEM,أدوات المطبخ,مضرب خلط صغير,عدد,2,2,0,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+34,REAL_ITEM,أدوات المطبخ,صحون بالستيك اسود ) (,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+35,REAL_ITEM,أدوات المطبخ,مشحف بطاطا,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+36,REAL_ITEM,أدوات المطبخ,مالقط,عدد,4,4,0,0,4,4,4,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+37,REAL_ITEM,أدوات المطبخ,براشة كبيرة,عدد,1,1,0,1,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+38,REAL_ITEM,أدوات المطبخ,براشة صغيرة,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+39,REAL_ITEM,أدوات المطبخ,معالق خشب,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+40,REAL_ITEM,أدوات المطبخ,معلقة رز,عدد,2,2,0,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+41,REAL_ITEM,أدوات المطبخ,معلقة ميونيز,عدد,4,4,0,0,4,4,4,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+42,REAL_ITEM,أدوات المطبخ,كفكير,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+43,REAL_ITEM,أدوات المطبخ,بخاخة ماء,عدد,1,1,0,1,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+44,REAL_ITEM,أدوات المطبخ,كفكير مصفاية,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+45,REAL_ITEM,أدوات المطبخ,قشارة بطاطا,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+46,REAL_ITEM,أدوات المطبخ,عالقة,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+47,REAL_ITEM,أدوات المطبخ,مطربان بلور,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+48,REAL_ITEM,أدوات المطبخ,مفتاح تنك,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+49,REAL_ITEM,أدوات المطبخ,قشاطة ميونيز كبيرة,عدد,2,2,0,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+50,REAL_ITEM,أدوات المطبخ,قشاطة ميونيز صغيرة,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+51,REAL_ITEM,أدوات المطبخ,فرشاية زيت,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+52,REAL_ITEM,أدوات المطبخ,مقص,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+53,REAL_ITEM,أدوات المطبخ,علب عصارات,عدد,6,6,0,0,6,6,6,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+54,REAL_ITEM,أدوات المطبخ,عصارة ليمون,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+55,REAL_ITEM,أدوات المطبخ,سكوار طويل,عدد,2,2,0,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+56,REAL_ITEM,أدوات المطبخ,صواني,عدد,4,4,0,0,4,4,4,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+57,REAL_ITEM,أدوات المطبخ,علبة بهارات بسطة,عدد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+58,REAL_ITEM,أدوات المطبخ,ترابيع كبيرة,عدد,9,9,0,0,9,9,9,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+59,REAL_ITEM,أدوات المطبخ,مصافي ترابيع,عدد,5,5,0,0,5,5,5,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+60,REAL_ITEM,أدوات المطبخ,مطربان بهارات وسط,عدد,9,9,0,0,9,9,9,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+61,REAL_ITEM,أدوات المطبخ,مصفاية جاط كبير,عدد,1,1,0,1,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+62,REAL_ITEM,أدوات المطبخ,سلل خضار,عدد,10,10,0,0,10,10,10,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+63,REAL_ITEM,أدوات المطبخ,بانيو بالستيك كبيرة مع 3 اغطية,عدد,3,3,0,0,3,3,3,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+64,REAL_ITEM,بهارات و غذائيات,طحين,كما ورد في الجرد بالكيلو,2,2,19,16,5,5,5,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+65,REAL_ITEM,بهارات و غذائيات,سكر,كما ورد في الجرد,1 كيلو,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+66,REAL_ITEM,بهارات و غذائيات,ملح طعام,كما ورد في الجرد,3 أكياس صغيرة,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+67,REAL_ITEM,بهارات و غذائيات,كياس زيت,كما ورد في الجرد,2 كيس,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+68,REAL_ITEM,بهارات و غذائيات,خل تفاح,كما ورد في الجرد,2 لتر,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+69,REAL_ITEM,بهارات و غذائيات,صوص حار,كما ورد في الجرد,1 عبوة,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+70,REAL_ITEM,بهارات و غذائيات,بهارات ماجي,كما ورد في الجرد,1 كيس,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+71,REAL_ITEM,بهارات و غذائيات,أرز اندونيسي,كما ورد في الجرد,1 كيس وزن 10 كيلو,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+72,POSSIBLE_DUPLICATE,بهارات و غذائيات,ارز مندي,كما ورد في الجرد,10kg كيس 5+5,,0,1,-1,-1,,CURRENT_REQUIRES_REVIEW,,—,"soft-alef group ""ارز مندي"" with variants: ارز مندي | أرز مندي"
+73,REAL_ITEM,بهارات و غذائيات,دبس بندورة,كما ورد في الجرد,علبة 3 كيلو,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+74,REAL_ITEM,بهارات و غذائيات,كولجين,كما ورد في الجرد,كيس صغير,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+75,REAL_ITEM,بهارات و غذائيات,ملح صيني,كما ورد في الجرد,2 كيس,,0,1,-1,-1,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+76,REAL_ITEM,بهارات و غذائيات,كراويا,كما ورد في الجرد,3 كيس صغير,,0,1,-1,-1,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+77,REAL_ITEM,بهارات و غذائيات,اكليل الجبل,كما ورد في الجرد,علبة صغيرة,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+78,REAL_ITEM,بهارات و غذائيات,دبس رمان عصارة,كما ورد في الجرد,عدد 5,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+79,REAL_ITEM,بهارات و غذائيات,كعك ياباني,كما ورد في الجرد,1 كيلو,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+80,REAL_ITEM,بهارات و غذائيات,نشاء,كما ورد في الجرد,1 طرد 9 كيلو,,60,7,53,53,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+81,REAL_ITEM,بهارات و غذائيات,اوريغانو,كما ورد في الجرد,2 كيس g+100g100,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,"first occurrence of exact-duplicate name ""اوريغانو"" (2 total)"
+82,REAL_ITEM,بهارات و غذائيات,ورق غار,كما ورد في الجرد,2 كيس g+350g100,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+83,REAL_ITEM,بهارات و غذائيات,كركم,كما ورد في الجرد,1 كيس,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+84,REAL_ITEM,بهارات و غذائيات,هيل حب,كما ورد في الجرد,2 كيس g+100g100,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+85,REAL_ITEM,بهارات و غذائيات,حمض ليمون,كما ورد في الجرد,6 أكياس g600,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+86,REAL_ITEM,بهارات و غذائيات,كزبرة,كما ورد في الجرد,2 كيس g+100g500,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+87,REAL_ITEM,بهارات و غذائيات,فلفل اسود,كما ورد في الجرد,2 كيس g200,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+88,REAL_ITEM,بهارات و غذائيات,قرنفل,كما ورد في الجرد,2 كيس g200,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+89,REAL_ITEM,بهارات و غذائيات,جوزة الطيب,كما ورد في الجرد,2 كيس g200,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+90,DUPLICATE_EXACT,بهارات و غذائيات,اوريغانو,كما ورد في الجرد,2 كيس g200,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,"exact duplicate of name ""اوريغانو"" (first at row 81)"
+91,REAL_ITEM,بهارات و غذائيات,قرفة,كما ورد في الجرد,2 كيس g200,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+92,REAL_ITEM,بهارات و غذائيات,حلبة,كما ورد في الجرد,2 كيس g200,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+93,REAL_ITEM,بهارات و غذائيات,فلفل ابيض,كما ورد في الجرد,2 كيس G600,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+94,REAL_ITEM,بهارات و غذائيات,زنجبيل,كما ورد في الجرد,2 كيس g400,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+95,REAL_ITEM,بهارات و غذائيات,كمون,كما ورد في الجرد,1 كيس g100,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+96,REAL_ITEM,بهارات و غذائيات,توم بودرة,كما ورد في الجرد,1 كيس g500,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+97,REAL_ITEM,بهارات و غذائيات,بصل بودرة,كما ورد في الجرد,1 كيلو,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+98,REAL_ITEM,بهارات و غذائيات,بابريكا,كما ورد في الجرد,2 كيس g200,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+99,REAL_ITEM,بهارات و غذائيات,بهارات مندي,كما ورد في الجرد,2 كيلو,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+100,REAL_ITEM,بهارات و غذائيات,طحينة,كما ورد في الجرد,1 كيس g400,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+101,REAL_ITEM,بهارات و غذائيات,كاري,كما ورد في الجرد,2,2,0,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+102,REAL_ITEM,بهارات و غذائيات,فلفل احمر,كما ورد في الجرد,g500 علبة,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+103,REAL_ITEM,بهارات و غذائيات,خميرة فورية,كما ورد في الجرد,2 ظروف,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,"first occurrence of exact-duplicate name ""خميرة فورية"" (2 total)"
+104,DUPLICATE_EXACT,بهارات و غذائيات,خميرة فورية,كما ورد في الجرد,2,2,0,0,2,2,2,VERIFIED,,—,"exact duplicate of name ""خميرة فورية"" (first at row 103)"
+105,REAL_ITEM,التغليف,صحن سلطة,كما ورد في الجرد,2 كيس,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+106,REAL_ITEM,التغليف,أكياس صغيرة,كما ورد في الجرد,10 ربطات,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+107,REAL_ITEM,التغليف,محارم تواليت,كما ورد في الجرد,30رول   3أكياس كبيرة,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+108,REAL_ITEM,التغليف,ليف,كما ورد في الجرد,1 طرد 88 قطعة,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+109,REAL_ITEM,التغليف,سيف,كما ورد في الجرد,1 طرد قطعة95 + اربع قطع كبيرة,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+110,REAL_ITEM,التغليف,ربطة كفوف بيض,كما ورد في الجرد,1 علبة,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+111,REAL_ITEM,التغليف,شوك بالستيك,كما ورد في الجرد,4 اكياس,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+112,REAL_ITEM,التغليف,أكياس كبيرة,كما ورد في الجرد,18 ربطة,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+113,REAL_ITEM,مواد تنظيف,ملمع زجاج,كما ورد في الجرد,1 علبة,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+114,REAL_ITEM,مواد تنظيف,ديتول,كما ورد في الجرد,1 علبة,,0,0,0,0,,CURRENT_REQUIRES_REVIEW,,—,has category + item name; treated as master by dry-run importer
+115,REAL_ITEM,مواد تنظيف,لودلين,كما ورد في الجرد,2,2,0,1,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+116,REAL_ITEM,مواد تنظيف,معطر,كما ورد في الجرد,1,1,0,0,1,1,1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+117,REAL_ITEM,مواد تنظيف,كلور,كما ورد في الجرد,1,1,4,0,5,5,5,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+120,REAL_ITEM,أصناف مضافة من الحركة,زيت نخيل,18 لتر,0,0,37,1,36,36,36,VERIFIED,,36كيس من فئة 2لا لتر,has category + item name; treated as master by dry-run importer
+121,REAL_ITEM,أصناف مضافة من الحركة,مستكة,كيلو1,0,0,2,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+122,REAL_ITEM,أصناف مضافة من الحركة,زيت دوار الشمس,5 لتر,0,0,1,1,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+123,REAL_ITEM,أصناف مضافة من الحركة,حليب بودرة,780g,0,0,1,1,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+124,REAL_ITEM,أصناف مضافة من الحركة,سوسيرات,,0,0,0,0,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+125,REAL_ITEM,أصناف مضافة من الحركة,فانيليا,120g+علبتين مجموع 1كيلو,0,0,2,0,2,2,2,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+126,REAL_ITEM,أصناف مضافة من الحركة,دجاج,3 كيلو,0,0,2,2,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+127,REAL_ITEM,أصناف مضافة من الحركة,صدر بجلدة,2900g,0,0,0,0,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+128,REAL_ITEM,أصناف مضافة من الحركة,جزر,700g,0,0,0,0,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+129,REAL_ITEM,أصناف مضافة من الحركة,ليمون,2kg,0,0,0,0,0,0,0,VERIFIED,,—,"first occurrence of exact-duplicate name ""ليمون"" (2 total)"
+130,REAL_ITEM,أصناف مضافة من الحركة,برتقال,1500g,0,0,0,1,-1,-1,-1,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+131,REAL_ITEM,أصناف مضافة من الحركة,ملفوف,1800g,0,0,0,0,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+132,REAL_ITEM,أصناف مضافة من الحركة,ثوم,500g,0,0,0,0,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+133,REAL_ITEM,أصناف مضافة من الحركة,دبس فليفة,500g,0,0,0,0,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+134,REAL_ITEM,أصناف مضافة من الحركة,موزاريلا,500g,0,0,2,2,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+135,REAL_ITEM,أصناف مضافة من الحركة,بندورة,1kg,0,0,0,0,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+136,REAL_ITEM,أصناف مضافة من الحركة,مماسمح ارض,3,0,0,0,0,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+137,REAL_ITEM,أصناف مضافة من الحركة,عصاية تنظيف طويلة,1,0,0,0,0,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+138,REAL_ITEM,أصناف مضافة من الحركة,مقشة ارض,2,0,0,0,0,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+139,REAL_ITEM,أصناف مضافة من الحركة,سلم,1,0,0,0,0,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+140,REAL_ITEM,أصناف مضافة من الحركة,علاقة حديد,2,0,0,0,0,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+141,REAL_ITEM,أصناف مضافة من الحركة,مكيف صغير للمستودع,1,0,0,0,0,0,0,0,VERIFIED,,—,has category + item name; treated as master by dry-run importer
+142,DUPLICATE_EXACT,أصناف مضافة من الحركة,ليمون,2kg,0,0,0,0,0,0,0,VERIFIED,,—,"exact duplicate of name ""ليمون"" (first at row 129)"
+143,POSSIBLE_DUPLICATE,أصناف مضافة من الحركة,أرز مندي,5kg,0,0,0,1,-1,-1,-1,VERIFIED,,—,"soft-alef group ""ارز مندي"" with variants: ارز مندي | أرز مندي"
+144,REAL_ITEM,أصناف مضافة من الحركة,صحون بلاستيك و معالق,,0,0,0,2,-2,-2,-2,VERIFIED,,—,has category + item name; treated as master by dry-run importer

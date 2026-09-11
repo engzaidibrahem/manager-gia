@@ -6,6 +6,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -22,8 +23,12 @@ export const inventoryItemsTable = pgTable("inventory_items", {
   kitchenStock: numeric("kitchen_stock", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
   minimumStock: numeric("minimum_stock", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
   costPerUnit: numeric("cost_per_unit", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
+  /** Soft-archive timestamp — history (movements/lots) is retained. */
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  uniqueIndex("inventory_items_qr_token_uidx").on(t.qrToken),
+]);
 
 export const inventoryMovementsTable = pgTable("inventory_movements", {
   id: serial("id").primaryKey(),
@@ -31,10 +36,20 @@ export const inventoryMovementsTable = pgTable("inventory_movements", {
   type: text("type").notNull(),
   location: text("location").notNull().default("warehouse"),
   quantity: numeric("quantity", { precision: 12, scale: 2, mode: "number" }).notNull(),
+  unitCost: numeric("unit_cost", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
   note: text("note"),
   actor: text("actor").notNull(),
   purchaseId: integer("purchase_id"),
   lotId: integer("lot_id"),
+  fromLocation: text("from_location"),
+  toLocation: text("to_location"),
+  baseQuantity: numeric("base_quantity", { precision: 12, scale: 4, mode: "number" }),
+  unit: text("unit"),
+  method: text("method"),
+  userId: integer("user_id"),
+  reversalOfId: integer("reversal_of_id"),
+  /** JSON array of {lotId, quantity} for FIFO consume / exact reversal restore. */
+  lotAllocations: text("lot_allocations"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -49,6 +64,10 @@ export const expensesTable = pgTable("expenses", {
   receivedBy: text("received_by").notNull(),
   paymentMethod: text("payment_method").notNull(),
   notes: text("notes"),
+  status: text("status").notNull().default("active"), // active | voided
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: text("voided_by"),
+  voidReason: text("void_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -60,8 +79,43 @@ export const incomeTable = pgTable("income", {
   amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
   recordedBy: text("recorded_by").notNull(),
   notes: text("notes"),
+  status: text("status").notNull().default("active"), // active | voided
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: text("voided_by"),
+  voidReason: text("void_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Opening cash balance per business day (Excel-style daily ledger). Not restaurant capital. */
+export const dailyCashBalancesTable = pgTable("daily_cash_balances", {
+  id: serial("id").primaryKey(),
+  businessDate: date("business_date", { mode: "string" }).notNull().unique(),
+  openingBalance: numeric("opening_balance", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
+  notes: text("notes"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Operational capital register (initial / additional).
+ * Distinct from daily_cash_balances opening (cashier-day book).
+ */
+export const capitalEntriesTable = pgTable("capital_entries", {
+  id: serial("id").primaryKey(),
+  entryDate: date("entry_date", { mode: "string" }).notNull(),
+  entryType: text("entry_type").notNull(), // initial_capital | additional_capital
+  description: text("description").notNull().default(""),
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  actor: text("actor").notNull(),
+  userId: integer("user_id"),
+  status: text("status").notNull().default("active"), // active | voided
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: text("voided_by"),
+  voidReason: text("void_reason"),
+  clientRequestId: text("client_request_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("capital_entries_client_request_uidx").on(t.clientRequestId),
+]);
 
 export const employeesTable = pgTable("employees", {
   id: serial("id").primaryKey(),
@@ -81,6 +135,19 @@ export const attendanceTable = pgTable("attendance", {
   checkOut: text("check_out"),
   status: text("status").notNull(),
   notes: text("notes"),
+}, (t) => [
+  uniqueIndex("attendance_employee_date_uidx").on(t.employeeId, t.attendanceDate),
+]);
+
+/** App users for Authentication / Authorization. */
+export const appUsersTable = pgTable("app_users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  fullName: text("full_name").notNull(),
+  role: text("role").notNull().default("viewer"),
+  active: text("active").notNull().default("yes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const dailyPurchasesTable = pgTable("daily_purchases", {
@@ -100,9 +167,35 @@ export const dailyPurchasesTable = pgTable("daily_purchases", {
   inventoryItemId: integer("inventory_item_id"),
   destination: text("destination").notNull().default("warehouse"),
   addToStock: text("add_to_stock").notNull().default("yes"),
+  status: text("status").notNull().default("ordered"),
+  quantityReceived: numeric("quantity_received", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
+  invoiceNumber: text("invoice_number").notNull().default(""),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Purchase payments ledger — paid purchases reduce Available Capital.
+ * One active payment per purchase. Never auto-insert into expenses.
+ */
+export const purchasePaymentsTable = pgTable("purchase_payments", {
+  id: serial("id").primaryKey(),
+  purchaseId: integer("purchase_id").notNull().references(() => dailyPurchasesTable.id),
+  amount: numeric("amount", { precision: 14, scale: 2, mode: "number" }).notNull(),
+  paymentDate: date("payment_date", { mode: "string" }).notNull(),
+  paymentMethod: text("payment_method").notNull().default("Transfer"),
+  actor: text("actor").notNull(),
+  userId: integer("user_id"),
+  status: text("status").notNull().default("active"), // active | voided
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: text("voided_by"),
+  voidReason: text("void_reason"),
+  clientRequestId: text("client_request_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("purchase_payments_client_request_uidx").on(t.clientRequestId),
+]);
 
 export const wasteRecordsTable = pgTable("waste_records", {
   id: serial("id").primaryKey(),
@@ -185,6 +278,7 @@ export const warehouseLotsTable = pgTable("warehouse_lots", {
   note: text("note"),
   actor: text("actor").notNull().default(""),
   archiveId: integer("archive_id"),
+  purchaseId: integer("purchase_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -192,6 +286,9 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItemsTable)
 export const insertInventoryMovementSchema = createInsertSchema(inventoryMovementsTable).omit({ id: true, createdAt: true });
 export const insertExpenseSchema = createInsertSchema(expensesTable).omit({ id: true, createdAt: true });
 export const insertIncomeSchema = createInsertSchema(incomeTable).omit({ id: true, createdAt: true });
+export const insertDailyCashBalanceSchema = createInsertSchema(dailyCashBalancesTable).omit({ id: true, updatedAt: true });
+export const insertCapitalEntrySchema = createInsertSchema(capitalEntriesTable).omit({ id: true, createdAt: true });
+export const insertPurchasePaymentSchema = createInsertSchema(purchasePaymentsTable).omit({ id: true, createdAt: true });
 export const insertEmployeeSchema = createInsertSchema(employeesTable).omit({ id: true });
 export const insertAttendanceSchema = createInsertSchema(attendanceTable).omit({ id: true });
 export const insertDailyPurchaseSchema = createInsertSchema(dailyPurchasesTable).omit({ id: true, createdAt: true });
@@ -201,11 +298,15 @@ export const insertRecipeLineSchema = createInsertSchema(recipeLinesTable).omit(
 export const insertDailyArchiveSchema = createInsertSchema(dailyArchivesTable).omit({ id: true, closedAt: true });
 export const insertWarehouseDayArchiveSchema = createInsertSchema(warehouseDayArchivesTable).omit({ id: true, closedAt: true });
 export const insertWarehouseLotSchema = createInsertSchema(warehouseLotsTable).omit({ id: true, createdAt: true });
+export const insertAppUserSchema = createInsertSchema(appUsersTable).omit({ id: true, createdAt: true });
 
 export type InventoryItem = typeof inventoryItemsTable.$inferSelect;
 export type InventoryMovement = typeof inventoryMovementsTable.$inferSelect;
 export type Expense = typeof expensesTable.$inferSelect;
 export type Income = typeof incomeTable.$inferSelect;
+export type DailyCashBalance = typeof dailyCashBalancesTable.$inferSelect;
+export type CapitalEntry = typeof capitalEntriesTable.$inferSelect;
+export type PurchasePayment = typeof purchasePaymentsTable.$inferSelect;
 export type Employee = typeof employeesTable.$inferSelect;
 export type Attendance = typeof attendanceTable.$inferSelect;
 export type DailyPurchase = typeof dailyPurchasesTable.$inferSelect;
@@ -215,10 +316,12 @@ export type RecipeLine = typeof recipeLinesTable.$inferSelect;
 export type DailyArchive = typeof dailyArchivesTable.$inferSelect;
 export type WarehouseDayArchive = typeof warehouseDayArchivesTable.$inferSelect;
 export type WarehouseLot = typeof warehouseLotsTable.$inferSelect;
+export type AppUser = typeof appUsersTable.$inferSelect;
 export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
 export type InsertInventoryMovement = z.infer<typeof insertInventoryMovementSchema>;
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
 export type InsertIncome = z.infer<typeof insertIncomeSchema>;
+export type InsertDailyCashBalance = z.infer<typeof insertDailyCashBalanceSchema>;
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type InsertAttendance = z.infer<typeof insertAttendanceSchema>;
 export type InsertDailyPurchase = z.infer<typeof insertDailyPurchaseSchema>;
@@ -228,3 +331,4 @@ export type InsertRecipeLine = z.infer<typeof insertRecipeLineSchema>;
 export type InsertDailyArchive = z.infer<typeof insertDailyArchiveSchema>;
 export type InsertWarehouseDayArchive = z.infer<typeof insertWarehouseDayArchiveSchema>;
 export type InsertWarehouseLot = z.infer<typeof insertWarehouseLotSchema>;
+export type InsertAppUser = z.infer<typeof insertAppUserSchema>;

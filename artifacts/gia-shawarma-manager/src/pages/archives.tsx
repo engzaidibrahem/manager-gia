@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Archive, CalendarDays, CheckCircle2, Package } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { FormField, FormSection, PageHint, PrimaryButton, TextInput } from '@/components/FormKit';
 import { Flash, PageTitle } from '@/components/layout';
 import {
   closeDayArchive, getDayArchive, getDayArchiveStatus, listDayArchives,
 } from '@/lib/bulk-api';
 import { useT, type Lang } from '@/lib/i18n';
-import { formatIDR, shortDate, todayISO } from '@/lib/utils';
+import { formatIDR, formatBusinessDate, todayISO } from '@/lib/utils';
 
 export function ArchivesPage({ lang }: { lang: Lang }) {
   const t = useT(lang);
@@ -22,14 +23,15 @@ export function ArchivesPage({ lang }: { lang: Lang }) {
   const detailQuery = useQuery({
     queryKey: ['day-archive', selected],
     queryFn: () => getDayArchive(selected),
-    enabled: Boolean(selected) && (listQuery.data?.some((a) => a.businessDate === selected) ?? false),
+    enabled: Boolean(selected),
     retry: false,
   });
 
   useEffect(() => {
     if (!listQuery.data?.length) return;
-    if (!listQuery.data.some((a) => a.businessDate === selected)) {
-      setSelected(listQuery.data[0]!.businessDate);
+    const normalized = listQuery.data.map((a) => String(a.businessDate).slice(0, 10));
+    if (!normalized.includes(selected)) {
+      setSelected(normalized[0]!);
     }
   }, [listQuery.data, selected]);
 
@@ -69,30 +71,33 @@ export function ArchivesPage({ lang }: { lang: Lang }) {
           <div className="flex flex-wrap items-center gap-2">
             {todayArchived ? (
               <span className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-700">
-                <CheckCircle2 size={15} />{t('dayArchived')} · {shortDate(today)}
+                <CheckCircle2 size={15} />{t('dayArchived')} · {formatBusinessDate(today, lang === 'id' ? 'id-ID' : 'ar-SA')}
               </span>
             ) : null}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => closeDay(todayArchived)}
-              className="rounded-xl bg-[hsl(var(--primary))] px-4 py-2.5 text-xs font-bold text-[hsl(var(--primary-foreground))] shadow-[0_3px_0_hsl(17_78%_32%)] disabled:opacity-60"
-            >
+            <PrimaryButton disabled={busy} onClick={() => closeDay(todayArchived)}>
               {todayArchived ? t('rearchive') : t('closeDay')}
-            </button>
+            </PrimaryButton>
           </div>
         )}
       />
 
-      <section className="panel soft-shadow mb-4 p-4 md:p-5">
-        <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))]">{lang === 'id' ? 'Catatan penutupan (opsional)' : 'ملاحظة الإغلاق (اختياري)'}</label>
-        <input
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          className="mt-2 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
-          placeholder={lang === 'id' ? 'Contoh: shift malam selesai, stok dicek' : 'مثال: انتهت وردية المساء، تم جرد المخزون'}
-        />
-      </section>
+      <PageHint>
+        {lang === 'id'
+          ? 'Arsip harian menyimpan foto operasi hari itu: pembelian, kas, dapur, dan ringkasan gudang.'
+          : 'الأرشيف اليومي يحفظ صورة يوم العمل: المشتريات والنقد والمطبخ وملخص المستودع.'}
+      </PageHint>
+
+      <p className="mb-4 text-xs font-semibold text-[hsl(var(--muted-foreground))]">{t('archiveLiveDataNote')}</p>
+
+      <FormSection className="mb-4">
+        <FormField label={lang === 'id' ? 'Catatan penutupan (opsional)' : 'ملاحظة الإغلاق (اختياري)'}>
+          <TextInput
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={lang === 'id' ? 'Contoh: shift malam selesai, stok dicek' : 'مثال: انتهت وردية المساء، تم جرد المخزون'}
+          />
+        </FormField>
+      </FormSection>
 
       <div className="grid gap-4 xl:grid-cols-[280px_1fr]">
         <aside className="panel soft-shadow p-4">
@@ -102,10 +107,10 @@ export function ArchivesPage({ lang }: { lang: Lang }) {
               <button
                 key={row.id}
                 type="button"
-                onClick={() => setSelected(row.businessDate)}
-                className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-start text-xs font-semibold ${selected === row.businessDate ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'hover:bg-[hsl(var(--muted))]'}`}
+                onClick={() => setSelected(String(row.businessDate).slice(0, 10))}
+                className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-start text-xs font-semibold ${selected === String(row.businessDate).slice(0, 10) ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'hover:bg-[hsl(var(--muted))]'}`}
               >
-                <span>{shortDate(row.businessDate)}</span>
+                <span>{formatBusinessDate(String(row.businessDate), lang === 'id' ? 'id-ID' : 'ar-SA')}</span>
                 <span className="number opacity-80">{formatIDR(row.totalPurchases)}</span>
               </button>
             ))}
@@ -121,7 +126,7 @@ export function ArchivesPage({ lang }: { lang: Lang }) {
               <section className="panel soft-shadow p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <h2 className="flex items-center gap-2 text-lg font-bold"><Archive size={18} />{shortDate(archive.businessDate)}</h2>
+                    <h2 className="flex items-center gap-2 text-lg font-bold"><Archive size={18} />{formatBusinessDate(archive.businessDate, lang === 'id' ? 'id-ID' : 'ar-SA')}</h2>
                     <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
                       {t('archivedAt')}: {new Date(archive.closedAt).toLocaleString(lang === 'id' ? 'id-ID' : 'ar-SA')} · {t('closedBy')}: {archive.closedBy || '—'}
                     </p>
@@ -129,12 +134,12 @@ export function ArchivesPage({ lang }: { lang: Lang }) {
                   </div>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <Stat label={t('openingBalance')} value={formatIDR(Number((archive.snapshot as { cash?: { openingBalance?: number } } | undefined)?.cash?.openingBalance ?? 0))} />
                   <Stat label={t('purchasesTotal')} value={formatIDR(archive.totalPurchases)} hint={`${archive.purchaseCount}`} />
+                  <Stat label={t('closingBalance')} value={formatIDR(Number((archive.snapshot as { cash?: { closingBalance?: number } } | undefined)?.cash?.closingBalance ?? (0)))} />
+                  <Stat label={t('netCash')} value={formatIDR(archive.netCash)} />
                   <Stat label={t('income')} value={formatIDR(archive.totalIncome)} />
                   <Stat label={t('expenses')} value={formatIDR(archive.totalExpenses)} />
-                  <Stat label={t('netCash')} value={formatIDR(archive.netCash)} />
-                  <Stat label={t('wasteCost')} value={formatIDR(archive.wasteCost)} />
-                  <Stat label={t('kitchenMoves')} value={String(archive.kitchenMovements)} />
                   <Stat label={t('warehouseValue')} value={formatIDR(archive.warehouseValue)} />
                   <Stat label={t('kitchenValue')} value={formatIDR(archive.kitchenValue)} />
                 </div>
