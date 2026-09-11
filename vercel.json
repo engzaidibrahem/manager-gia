@@ -6,6 +6,10 @@
   "outputDirectory": "artifacts/gia-shawarma-manager/dist/public",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://manager-gia-production.up.railway.app/api/:path*"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
