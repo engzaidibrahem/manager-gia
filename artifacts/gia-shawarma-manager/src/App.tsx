@@ -16,6 +16,7 @@ import { V3WarehouseInPage } from '@/pages/v3/warehouse-in';
 import { V3WarehouseOutPage } from '@/pages/v3/warehouse-out';
 import { V3KitchenPage } from '@/pages/v3/kitchen';
 import { V3PurchasesPage } from '@/pages/v3/purchases';
+import { V3PurchaseImportPage } from '@/pages/v3/purchase-import';
 import { V3FinancePage } from '@/pages/v3/finance';
 import { V3EmployeesPage } from '@/pages/v3/employees';
 import { V3EmployeeDetailPage } from '@/pages/v3/employee-detail';
@@ -48,6 +49,7 @@ function AppRouter({ user, onLogout }: { user: AuthUser; onLogout: () => void })
           <Route path="/warehouse-out"><V3WarehouseOutPage lang={lang} /></Route>
           <Route path="/warehouse-to-kitchen"><V3WarehouseOutPage lang={lang} /></Route>
           <Route path="/kitchen"><V3KitchenPage lang={lang} /></Route>
+          <Route path="/purchases/import"><V3PurchaseImportPage lang={lang} /></Route>
           <Route path="/purchases"><V3PurchasesPage lang={lang} /></Route>
           <Route path="/finance"><V3FinancePage lang={lang} /></Route>
           <Route path="/employees/:id"><V3EmployeeDetailPage lang={lang} /></Route>

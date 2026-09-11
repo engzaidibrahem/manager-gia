@@ -72,6 +72,7 @@ export async function listPurchases(opts: {
         r.itemName.toLowerCase().includes(q) ||
         r.supplier.toLowerCase().includes(q) ||
         r.purchasedBy.toLowerCase().includes(q) ||
+        (r.invoiceNumber || "").toLowerCase().includes(q) ||
         (r.notes || "").toLowerCase().includes(q),
     );
   }
@@ -201,7 +202,8 @@ async function resolveInventoryForDestination(
           category: (input.newItem?.category || "").trim(),
           baseUnit: (input.newItem?.baseUnit || input.unitRaw || "").trim(),
           minimumStock: input.newItem?.minimumStock ?? null,
-          warehouseQtyNumeric: 0,
+          // Kitchen-only identity: no warehouse stock until a real WH ledger exists.
+          warehouseQtyNumeric: null,
           kitchenQtyNumeric: 0,
           qrToken: `v3-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
           sourceType: "KITCHEN_DIRECT",
@@ -333,7 +335,7 @@ async function applyDestinationStockEffect(
   return mov.id;
 }
 
-export async function createPurchase(input: {
+export type CreatePurchaseInput = {
   purchaseDate?: string;
   purchaseTime?: string;
   itemName: string;
@@ -347,17 +349,43 @@ export async function createPurchase(input: {
   paidAmount?: number;
   paymentStatus?: V3PaymentStatus;
   supplier?: string;
+  invoiceNumber?: string | null;
   purchasedBy?: string;
   destination: V3PurchaseDestination;
   notes?: string;
   actor: string;
   userId?: number | null;
   clientRequestId?: string;
-}) {
-  const existing = await findPurchaseByClient(input.clientRequestId);
+};
+
+export type CreatePurchaseResult = {
+  idempotent: boolean;
+  committed: true;
+  purchase: typeof v3PurchasesTable.$inferSelect;
+  purchaseId: number;
+  inventoryItemId: number | null;
+  movementId: number | null;
+  destination: string;
+  quantityNumeric: number | null;
+  paymentStatus: string;
+};
+
+async function findPurchaseByClientInTx(tx: DbTx | typeof db, clientRequestId?: string) {
+  if (!clientRequestId?.trim()) return null;
+  return tx.query.v3PurchasesTable.findFirst({
+    where: eq(v3PurchasesTable.clientRequestId, clientRequestId.trim()),
+  });
+}
+
+/** Create purchase inside an existing transaction (batch import). */
+export async function createPurchaseInTx(
+  tx: DbTx,
+  input: CreatePurchaseInput,
+): Promise<CreatePurchaseResult> {
+  const existing = await findPurchaseByClientInTx(tx, input.clientRequestId);
   if (existing) {
     return {
-      idempotent: true as const,
+      idempotent: true,
       committed: true as const,
       purchase: existing,
       purchaseId: existing.id,
@@ -407,111 +435,130 @@ export async function createPurchase(input: {
   const unitRaw = (input.unitRaw || "").trim();
   const qtyNum = input.quantityNumeric === undefined ? null : input.quantityNumeric;
 
-  if ((dest === "WAREHOUSE" || dest === "KITCHEN_DIRECT") && qtyNum != null && !(qtyNum > 0)) {
+  if ((dest === "WAREHOUSE" || dest === "KITCHEN_DIRECT") && (qtyNum == null || !(qtyNum > 0))) {
     throw new AppError("VALIDATION_ERROR", "كمية المخزون يجب أن تكون أكبر من صفر");
   }
 
-  return db.transaction(async (tx) => {
-    const { inventoryItemId, resolvedName } = await resolveInventoryForDestination(tx, {
-      dest,
-      itemName,
-      inventoryItemId: input.inventoryItemId,
-      newItem: input.newItem,
-      unitRaw,
-    });
-
-    const [purchase] = await tx
-      .insert(v3PurchasesTable)
-      .values({
-        purchaseDate: input.purchaseDate || todayISO(),
-        purchaseTime: input.purchaseTime || "",
-        itemName: resolvedName,
-        inventoryItemId,
-        quantityNumeric: qtyNum,
-        quantityRaw: qtyRaw || (qtyNum != null ? String(qtyNum) : ""),
-        unitRaw,
-        unitPrice: Number(input.unitPrice || 0),
-        totalAmount: total,
-        paidAmount: paid,
-        paymentStatus,
-        supplier: (input.supplier || "").trim(),
-        purchasedBy: (input.purchasedBy || input.actor || "").trim(),
-        destination: dest,
-        notes: input.notes || null,
-        actor: input.actor,
-        userId: input.userId ?? null,
-        clientRequestId: input.clientRequestId?.trim() || null,
-      })
-      .returning();
-
-    const movementId = await applyDestinationStockEffect(tx, {
-      dest,
-      purchaseId: purchase.id,
-      inventoryItemId,
-      resolvedName,
-      qtyNum,
-      qtyRaw,
-      unitRaw,
-      purchaseDate: input.purchaseDate || todayISO(),
-      supplier: (input.supplier || "").trim(),
-      actor: input.actor,
-      userId: input.userId,
-      notes: input.notes,
-      clientRequestId: input.clientRequestId,
-    });
-
-    if (paid > 0) {
-      await tx.insert(v3PurchasePaymentsTable).values({
-        purchaseId: purchase.id,
-        amount: paid,
-        paymentDate: input.purchaseDate || todayISO(),
-        paymentMethod: "نقداً",
-        actor: input.actor,
-        userId: input.userId ?? null,
-        notes: "دفعة عند إنشاء المشتريات",
-        clientRequestId: input.clientRequestId?.trim()
-          ? `${input.clientRequestId.trim()}:pay-init`
-          : null,
-      });
-    }
-
-    if (movementId) {
-      await tx
-        .update(v3PurchasesTable)
-        .set({ movementId, updatedAt: new Date() })
-        .where(eq(v3PurchasesTable.id, purchase.id));
-    }
-
-    const finalPurchase = await tx.query.v3PurchasesTable.findFirst({
-      where: eq(v3PurchasesTable.id, purchase.id),
-    });
-    if (!finalPurchase?.id) {
-      throw new AppError("VALIDATION_ERROR", "تعذر تأكيد حفظ المشتريات بعد الالتزام", 500);
-    }
-    if (
-      (dest === "WAREHOUSE" || dest === "KITCHEN_DIRECT") &&
-      (movementId == null || finalPurchase.inventoryItemId == null)
-    ) {
-      throw new AppError(
-        "VALIDATION_ERROR",
-        "تعذر تأكيد حركة المخزون المرتبطة بالمشتريات",
-        500,
-      );
-    }
-
-    return {
-      idempotent: false as const,
-      committed: true as const,
-      purchase: finalPurchase,
-      purchaseId: finalPurchase.id,
-      inventoryItemId: finalPurchase.inventoryItemId ?? null,
-      movementId: movementId ?? finalPurchase.movementId ?? null,
-      destination: finalPurchase.destination,
-      quantityNumeric:
-        finalPurchase.quantityNumeric == null ? null : Number(finalPurchase.quantityNumeric),
-      paymentStatus: finalPurchase.paymentStatus,
-    };
+  const { inventoryItemId, resolvedName } = await resolveInventoryForDestination(tx, {
+    dest,
+    itemName,
+    inventoryItemId: input.inventoryItemId,
+    newItem: input.newItem,
+    unitRaw,
   });
+
+  const invoiceNumber = (input.invoiceNumber || "").trim() || null;
+
+  const [purchase] = await tx
+    .insert(v3PurchasesTable)
+    .values({
+      purchaseDate: input.purchaseDate || todayISO(),
+      purchaseTime: input.purchaseTime || "",
+      itemName: resolvedName,
+      inventoryItemId,
+      quantityNumeric: qtyNum,
+      quantityRaw: qtyRaw || (qtyNum != null ? String(qtyNum) : ""),
+      unitRaw,
+      unitPrice: Number(input.unitPrice || 0),
+      totalAmount: total,
+      paidAmount: paid,
+      paymentStatus,
+      supplier: (input.supplier || "").trim(),
+      invoiceNumber,
+      purchasedBy: (input.purchasedBy || input.actor || "").trim(),
+      destination: dest,
+      notes: input.notes || null,
+      actor: input.actor,
+      userId: input.userId ?? null,
+      clientRequestId: input.clientRequestId?.trim() || null,
+    })
+    .returning();
+
+  const movementId = await applyDestinationStockEffect(tx, {
+    dest,
+    purchaseId: purchase.id,
+    inventoryItemId,
+    resolvedName,
+    qtyNum,
+    qtyRaw,
+    unitRaw,
+    purchaseDate: input.purchaseDate || todayISO(),
+    supplier: (input.supplier || "").trim(),
+    actor: input.actor,
+    userId: input.userId,
+    notes: input.notes,
+    clientRequestId: input.clientRequestId,
+  });
+
+  if (paid > 0) {
+    await tx.insert(v3PurchasePaymentsTable).values({
+      purchaseId: purchase.id,
+      amount: paid,
+      paymentDate: input.purchaseDate || todayISO(),
+      paymentMethod: "نقداً",
+      actor: input.actor,
+      userId: input.userId ?? null,
+      notes: "دفعة عند إنشاء المشتريات",
+      clientRequestId: input.clientRequestId?.trim()
+        ? `${input.clientRequestId.trim()}:pay-init`
+        : null,
+    });
+  }
+
+  if (movementId) {
+    await tx
+      .update(v3PurchasesTable)
+      .set({ movementId, updatedAt: new Date() })
+      .where(eq(v3PurchasesTable.id, purchase.id));
+  }
+
+  const finalPurchase = await tx.query.v3PurchasesTable.findFirst({
+    where: eq(v3PurchasesTable.id, purchase.id),
+  });
+  if (!finalPurchase?.id) {
+    throw new AppError("VALIDATION_ERROR", "تعذر تأكيد حفظ المشتريات بعد الالتزام", 500);
+  }
+  if (
+    (dest === "WAREHOUSE" || dest === "KITCHEN_DIRECT") &&
+    (movementId == null || finalPurchase.inventoryItemId == null)
+  ) {
+    throw new AppError(
+      "VALIDATION_ERROR",
+      "تعذر تأكيد حركة المخزون المرتبطة بالمشتريات",
+      500,
+    );
+  }
+
+  return {
+    idempotent: false,
+    committed: true as const,
+    purchase: finalPurchase,
+    purchaseId: finalPurchase.id,
+    inventoryItemId: finalPurchase.inventoryItemId ?? null,
+    movementId: movementId ?? finalPurchase.movementId ?? null,
+    destination: finalPurchase.destination,
+    quantityNumeric:
+      finalPurchase.quantityNumeric == null ? null : Number(finalPurchase.quantityNumeric),
+    paymentStatus: finalPurchase.paymentStatus,
+  };
+}
+
+export async function createPurchase(input: CreatePurchaseInput): Promise<CreatePurchaseResult> {
+  const existing = await findPurchaseByClient(input.clientRequestId);
+  if (existing) {
+    return {
+      idempotent: true,
+      committed: true as const,
+      purchase: existing,
+      purchaseId: existing.id,
+      inventoryItemId: existing.inventoryItemId ?? null,
+      movementId: existing.movementId ?? null,
+      destination: existing.destination,
+      quantityNumeric: existing.quantityNumeric == null ? null : Number(existing.quantityNumeric),
+      paymentStatus: existing.paymentStatus,
+    };
+  }
+  return db.transaction(async (tx) => createPurchaseInTx(tx as unknown as DbTx, input));
 }
 
 export async function updatePurchase(input: {

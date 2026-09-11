@@ -134,6 +134,8 @@ export const v3PurchasesTable = pgTable("v3_purchases", {
   paidAmount: numeric("paid_amount", { precision: 14, scale: 2, mode: "number" }).notNull().default(0),
   paymentStatus: text("payment_status").notNull().default("UNPAID"),
   supplier: text("supplier").notNull().default(""),
+  /** Optional invoice / reference number from supplier (import + manual). */
+  invoiceNumber: text("invoice_number"),
   purchasedBy: text("purchased_by").notNull().default(""),
   /** WAREHOUSE | KITCHEN_DIRECT | CONSUMABLE */
   destination: text("destination").notNull(),

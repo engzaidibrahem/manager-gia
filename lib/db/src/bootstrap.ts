@@ -597,6 +597,7 @@ const MIGRATIONS = [
 )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS v3_purchases_client_request_uidx ON v3_purchases (client_request_id)`,
   `ALTER TABLE v3_purchases ADD COLUMN IF NOT EXISTS updated_by TEXT`,
+  `ALTER TABLE v3_purchases ADD COLUMN IF NOT EXISTS invoice_number TEXT`,
   `CREATE TABLE IF NOT EXISTS v3_purchase_payments (
   id SERIAL PRIMARY KEY,
   purchase_id INTEGER NOT NULL REFERENCES v3_purchases(id),

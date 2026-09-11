@@ -1,0 +1,18 @@
+# Gia API on Railway — pnpm workspace monorepo
+# Root Directory MUST be empty (repository root), NOT artifacts/api-server.
+# Setting Root Directory to the package folder breaks workspace:* and triggers npm.
+
+[build]
+builder = "RAILPACK"
+buildCommand = "pnpm --filter @workspace/api-server run build"
+watchPatterns = [
+  "/artifacts/api-server/**",
+  "/lib/**",
+  "/package.json",
+  "/pnpm-lock.yaml",
+  "/pnpm-workspace.yaml",
+  "/railway.toml"
+]
+
+[deploy]
+startCommand = "pnpm --filter @workspace/api-server run start"

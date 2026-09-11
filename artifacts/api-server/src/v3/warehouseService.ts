@@ -168,6 +168,48 @@ export async function updateItemMinimum(itemId: number, minimumStock: number | n
   return row;
 }
 
+/**
+ * Item IDs that have real warehouse ledger activity (not kitchen-direct-only).
+ * OPENING / WAREHOUSE_IN / WAREHOUSE_TO_KITCHEN / ADJUSTMENT or an opening_balances row.
+ */
+export async function loadWarehousePresenceItemIds(
+  tx: DbTx | typeof db = db,
+): Promise<Set<number>> {
+  const ids = new Set<number>();
+
+  const ledger = await tx.execute(sql`
+    SELECT DISTINCT inventory_item_id AS id
+    FROM v3_warehouse_movements
+    WHERE status = 'active'
+      AND inventory_item_id IS NOT NULL
+      AND movement_type IN ('OPENING', 'WAREHOUSE_IN', 'WAREHOUSE_TO_KITCHEN', 'ADJUSTMENT')
+  `);
+  const ledgerRows = ((ledger as unknown as { rows?: Array<Record<string, unknown>> }).rows
+    ?? (Array.isArray(ledger) ? (ledger as Array<Record<string, unknown>>) : [])) as Array<
+    Record<string, unknown>
+  >;
+  for (const r of ledgerRows) {
+    const id = Number(r.id);
+    if (Number.isFinite(id)) ids.add(id);
+  }
+
+  const openings = await tx.select({ id: v3OpeningBalancesTable.inventoryItemId }).from(v3OpeningBalancesTable);
+  for (const o of openings) {
+    if (o.id != null) ids.add(o.id);
+  }
+
+  return ids;
+}
+
+/** Warehouse page / pickers: exclude kitchen-direct-only catalog rows with no WH ledger. */
+export function isWarehouseCatalogItem(
+  item: { id: number; sourceType: string },
+  presenceIds: Set<number>,
+): boolean {
+  if (presenceIds.has(item.id)) return true;
+  return item.sourceType !== "KITCHEN_DIRECT";
+}
+
 export async function listWarehouseSummary(opts: {
   q?: string;
   category?: string;
@@ -190,6 +232,8 @@ export async function listWarehouseSummary(opts: {
     .from(v3InventoryItemsTable)
     .where(and(...conditions))
     .orderBy(v3InventoryItemsTable.category, v3InventoryItemsTable.name);
+
+  const presenceIds = await loadWarehousePresenceItemIds();
 
   // Aggregate movement totals per item for Excel-like columns
   const totals = await db.execute(sql`
@@ -227,7 +271,9 @@ export async function listWarehouseSummary(opts: {
     }
   }
 
-  let rows = all.map((item) => {
+  let rows = all
+    .filter((item) => isWarehouseCatalogItem(item, presenceIds))
+    .map((item) => {
     const t = totMap.get(item.id) || { opening: 0, totalIn: 0, totalOut: 0 };
     const op = openingRaw.get(item.id);
     const needsQuantityReview = Boolean(item.needsQuantityReview);
@@ -279,6 +325,8 @@ export async function listWarehouseSummary(opts: {
     };
   });
 
+  const categories = [...new Set(rows.map((i) => i.category).filter(Boolean))].sort();
+
   if (opts.status && opts.status !== "all") {
     rows = rows.filter((r) => r.status === opts.status);
   }
@@ -286,7 +334,6 @@ export async function listWarehouseSummary(opts: {
   const total = rows.length;
   const start = (page - 1) * pageSize;
   const pageRows = rows.slice(start, start + pageSize);
-  const categories = [...new Set(all.map((i) => i.category).filter(Boolean))].sort();
 
   return { rows: pageRows, total, page, pageSize, categories };
 }
@@ -870,16 +917,22 @@ export async function getItemByQr(qrToken: string) {
 export async function listItemsBrief(q?: string) {
   const conditions = [eq(v3InventoryItemsTable.isActive, true)];
   if (q?.trim()) conditions.push(ilike(v3InventoryItemsTable.name, `%${q.trim()}%`));
-  return db
+  const presenceIds = await loadWarehousePresenceItemIds();
+  const rows = await db
     .select({
       id: v3InventoryItemsTable.id,
       name: v3InventoryItemsTable.name,
       category: v3InventoryItemsTable.category,
       baseUnit: v3InventoryItemsTable.baseUnit,
       warehouseQtyNumeric: v3InventoryItemsTable.warehouseQtyNumeric,
+      sourceType: v3InventoryItemsTable.sourceType,
     })
     .from(v3InventoryItemsTable)
     .where(and(...conditions))
     .orderBy(v3InventoryItemsTable.name)
-    .limit(100);
+    .limit(300);
+  return rows
+    .filter((r) => isWarehouseCatalogItem(r, presenceIds))
+    .slice(0, 100)
+    .map(({ sourceType: _sourceType, ...rest }) => rest);
 }

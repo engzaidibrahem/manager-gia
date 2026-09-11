@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChoiceCard,
@@ -375,6 +376,11 @@ export function V3PurchasesPage({ lang }: { lang: Lang }) {
 
       <div className="mb-4 flex flex-wrap gap-2">
         <PrimaryButton onClick={openCreate}>+ {lang === "id" ? "Tambah pembelian" : "إضافة مشتريات"}</PrimaryButton>
+        <Link href="/purchases/import">
+          <SecondaryButton type="button">
+            {lang === "id" ? "Impor Excel" : "استيراد مشتريات من Excel"}
+          </SecondaryButton>
+        </Link>
         <TextInput className="max-w-xs" placeholder={lang === "id" ? "Cari..." : "بحث..."} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
         <TextInput type="date" className="max-w-[150px]" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} />
         <TextInput type="date" className="max-w-[150px]" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} />

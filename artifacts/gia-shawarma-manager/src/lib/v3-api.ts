@@ -291,6 +291,90 @@ export function postV3Purchase(body: Record<string, unknown>) {
   return api<V3PurchaseCommit>("/purchases", { method: "POST", body: JSON.stringify(body) });
 }
 
+export type V3ImportValidateResult = {
+  schemaVersion: string;
+  fileFingerprint: string;
+  rowCount: number;
+  rows: Array<{
+    schemaVersion: string;
+    lineNo: number;
+    purchaseDate: string;
+    purchaseTime: string;
+    supplier: string;
+    invoiceNumber: string;
+    itemName: string;
+    quantityNumeric: number | null;
+    quantityRaw: string;
+    unitRaw: string;
+    unitPrice: number;
+    totalAmount: number;
+    paidAmountHint: number | null;
+    paymentStatusHint: "PAID" | "UNPAID" | "PARTIAL" | null;
+    notes: string;
+    sourceImageRef: string;
+    warnings: string[];
+    priceMismatch: boolean;
+    unclearQuantity: boolean;
+  }>;
+  groups: Array<{
+    groupKey: string;
+    purchaseDate: string;
+    supplier: string;
+    invoiceNumber: string;
+    lineCount: number;
+    invoiceTotal: number;
+    paidHintSum: number;
+    paymentStatusHint: "PAID" | "UNPAID" | "PARTIAL" | null;
+    lineNos: number[];
+    existingDuplicate: boolean;
+  }>;
+  warnings: Array<{ lineNo: number; warning: string }>;
+};
+
+export type V3ImportConfirmResult = {
+  completeSuccess: boolean;
+  purchasesCreated: number;
+  purchasesIdempotent: number;
+  warehouseEntries: number;
+  kitchenEntries: number;
+  consumables: number;
+  paymentsCreated: number;
+  allocationPreview: Array<{
+    lineNo: number;
+    totalAmount: number;
+    paidAmount: number;
+    paymentStatus: string;
+  }>;
+  lines: Array<Record<string, unknown>>;
+  failures: Array<{ lineNo: number; error: string }>;
+};
+
+export function validateV3PurchaseImport(body: {
+  workbookBase64?: string;
+  fileFingerprint?: string;
+  rows?: unknown[];
+}) {
+  return api<V3ImportValidateResult>("/purchases/import/validate", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function confirmV3PurchaseImport(body: Record<string, unknown>) {
+  return customFetch<V3ImportConfirmResult>(`/api/v3/purchases/import/confirm`, {
+    credentials: "include",
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).catch((err) => {
+    // 400 with structured failure payload is still useful for the UI.
+    if (isApiErr(err) && err.data && typeof err.data === "object" && "completeSuccess" in (err.data as object)) {
+      return err.data as V3ImportConfirmResult;
+    }
+    throw new Error(friendlyV3Error(err));
+  });
+}
+
 export function patchV3Purchase(id: number, body: Record<string, unknown>) {
   return api<{ committed?: boolean; purchaseId?: number; purchase?: V3Purchase }>(
     `/purchases/${id}`,

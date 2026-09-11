@@ -21,6 +21,7 @@ import {
   updatePurchase,
   voidPurchase,
 } from "../v3/purchaseService";
+import { confirmPurchaseImport, validateImportPayload } from "../v3/purchaseImportService";
 import {
   getFinanceSummary,
   listCapital,
@@ -259,6 +260,92 @@ router.get(
 );
 
 router.post(
+  "/purchases/import/validate",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        workbookBase64: z.string().optional(),
+        fileFingerprint: z.string().optional(),
+        rows: z.array(z.record(z.string(), z.unknown())).optional(),
+      })
+      .parse(req.body);
+
+    if (body.workbookBase64) {
+      const data = await validateImportPayload({ workbookBase64: body.workbookBase64 });
+      res.json(data);
+      return;
+    }
+
+    // Accept already-shaped rows (tests / advanced clients) or raw Excel-like objects.
+    if (body.rows?.length && "lineNo" in body.rows[0]!) {
+      const data = await validateImportPayload({
+        rows: body.rows as unknown as import("../v3/purchaseImportService").ParsedImportRow[],
+        fileFingerprint: body.fileFingerprint,
+      });
+      res.json(data);
+      return;
+    }
+
+    throw new AppError("VALIDATION_ERROR", "أرسل workbookBase64 أو صفوف مستوردة صالحة");
+  }),
+);
+
+router.post(
+  "/purchases/import/confirm",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        fileFingerprint: z.string().min(1),
+        invoicePayments: z.array(
+          z.object({
+            groupKey: z.string().min(1),
+            paymentStatus: z.enum(["PAID", "UNPAID", "PARTIAL"]),
+            paidAmount: z.number(),
+          }),
+        ),
+        rows: z.array(
+          z.object({
+            lineNo: z.number().int().positive(),
+            purchaseDate: z.string().min(1),
+            purchaseTime: z.string().optional(),
+            supplier: z.string().optional(),
+            invoiceNumber: z.string().optional(),
+            itemName: z.string().min(1),
+            quantityNumeric: z.number().nullable().optional(),
+            quantityRaw: z.string().optional(),
+            unitRaw: z.string().optional(),
+            unitPrice: z.number().optional(),
+            totalAmount: z.number(),
+            notes: z.string().optional(),
+            sourceImageRef: z.string().optional(),
+            destination: z.enum(["WAREHOUSE", "KITCHEN_DIRECT", "CONSUMABLE"]),
+            inventoryItemId: z.number().int().positive().nullable().optional(),
+            newItem: z
+              .object({
+                name: z.string().min(1),
+                category: z.string().optional(),
+                baseUnit: z.string().optional(),
+                minimumStock: z.number().nullable().optional(),
+              })
+              .nullable()
+              .optional(),
+          }),
+        ),
+      })
+      .parse(req.body);
+
+    const result = await confirmPurchaseImport({
+      fileFingerprint: body.fileFingerprint,
+      rows: body.rows,
+      invoicePayments: body.invoicePayments,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+    });
+    res.status(result.completeSuccess ? 201 : 400).json(result);
+  }),
+);
+
+router.post(
   "/purchases",
   asyncHandler(async (req, res) => {
     const body = z
@@ -284,6 +371,7 @@ router.post(
         paidAmount: z.number().optional(),
         paymentStatus: z.enum(["PAID", "UNPAID", "PARTIAL"]).optional(),
         supplier: z.string().optional(),
+        invoiceNumber: z.string().optional(),
         purchasedBy: z.string().optional(),
         destination: z.enum(["WAREHOUSE", "KITCHEN_DIRECT", "CONSUMABLE"]),
         notes: z.string().optional(),

@@ -24,8 +24,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "8mb" }));
+app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 
 function isPublicApi(req: Request): boolean {
   const full = (req.originalUrl || req.url || "").split("?")[0] || "";
