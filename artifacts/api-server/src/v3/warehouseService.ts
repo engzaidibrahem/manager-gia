@@ -10,7 +10,9 @@ import {
   v3InventoryItemsTable,
   v3OpeningBalancesTable,
   v3WarehouseMovementsTable,
+  type V3CanonicalStockStatus,
   type V3MovementType,
+  type V3SourceChannel,
 } from "@workspace/db";
 import { AppError } from "../lib/errors";
 
@@ -21,8 +23,8 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function newQrToken() {
-  return `v3-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+export function newQrToken() {
+  return `v3-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 /** Parse a value as numeric only when it is clearly a finite number. Never invent. */
@@ -50,6 +52,34 @@ export function stockStatus(
   return "available";
 }
 
+/** Canonical statuses for alerts / mobile (NULL minimum never false-alerts as LOW). */
+export function canonicalStockStatus(
+  warehouseQty: number | null,
+  minimumStock: number | null | undefined,
+): V3CanonicalStockStatus {
+  const s = stockStatus(warehouseQty, minimumStock);
+  if (s === "available") return "NORMAL";
+  if (s === "low") return "LOW_STOCK";
+  if (s === "out") return "OUT_OF_STOCK";
+  return "REVIEW_REQUIRED";
+}
+
+export function mapStatusQuery(
+  raw: string | undefined,
+): "all" | "available" | "low" | "out" | "unknown" {
+  const s = String(raw || "all").toUpperCase();
+  if (s === "NORMAL" || s === "AVAILABLE") return "available";
+  if (s === "LOW_STOCK" || s === "LOW") return "low";
+  if (s === "OUT_OF_STOCK" || s === "OUT") return "out";
+  if (s === "REVIEW_REQUIRED" || s === "UNKNOWN") return "unknown";
+  if (s === "ALL" || !raw) return "all";
+  const lower = String(raw).toLowerCase();
+  if (lower === "available" || lower === "low" || lower === "out" || lower === "unknown" || lower === "all") {
+    return lower;
+  }
+  return "all";
+}
+
 export async function recomputeItemBalances(tx: DbTx | typeof db, itemId: number) {
   const rows = await tx
     .select({
@@ -66,7 +96,8 @@ export async function recomputeItemBalances(tx: DbTx | typeof db, itemId: number
 
   let opening = 0;
   let inn = 0;
-  let out = 0;
+  let outToKitchen = 0;
+  let warehouseOut = 0;
   let kitchenDirect = 0;
   let adj = 0;
   let hasNullOpening = false;
@@ -89,10 +120,13 @@ export async function recomputeItemBalances(tx: DbTx | typeof db, itemId: number
     if (r.movementType === "WAREHOUSE_IN") {
       hasNumericWhLedger = true;
       inn += q;
+    } else if (r.movementType === "WAREHOUSE_OUT") {
+      hasNumericWhLedger = true;
+      warehouseOut += q;
     } else if (r.movementType === "WAREHOUSE_TO_KITCHEN") {
       hasNumericWhLedger = true;
       hasNumericKitchen = true;
-      out += q;
+      outToKitchen += q;
     } else if (r.movementType === "KITCHEN_DIRECT_IN") {
       hasNumericKitchen = true;
       kitchenDirect += q;
@@ -107,10 +141,11 @@ export async function recomputeItemBalances(tx: DbTx | typeof db, itemId: number
   if (hasNullOpening) {
     warehouse = null;
   } else if (hasNumericOpening || hasNumericWhLedger) {
-    warehouse = opening + inn - out + adj;
+    warehouse = opening + inn - outToKitchen - warehouseOut + adj;
   }
 
-  const kitchen = hasNumericKitchen || out > 0 || kitchenDirect > 0 ? out + kitchenDirect : 0;
+  const kitchen =
+    hasNumericKitchen || outToKitchen > 0 || kitchenDirect > 0 ? outToKitchen + kitchenDirect : 0;
 
   const needsQuantityReview = hasNullOpening;
 
@@ -168,6 +203,216 @@ export async function updateItemMinimum(itemId: number, minimumStock: number | n
   return row;
 }
 
+/** Ensure a stable unique QR exists; never rotates an existing non-empty token. */
+export async function ensureItemQrToken(itemId: number) {
+  const item = await db.query.v3InventoryItemsTable.findFirst({
+    where: eq(v3InventoryItemsTable.id, itemId),
+  });
+  if (!item) throw new AppError("ITEM_NOT_FOUND", "المادة غير موجودة", 404);
+  if (item.qrToken?.trim()) return { item, created: false as const };
+  const token = newQrToken();
+  const [updated] = await db
+    .update(v3InventoryItemsTable)
+    .set({ qrToken: token, updatedAt: new Date() })
+    .where(eq(v3InventoryItemsTable.id, itemId))
+    .returning();
+  return { item: updated!, created: true as const };
+}
+
+export async function ensureMissingQrTokens(itemIds?: number[]) {
+  const conditions = [
+    or(eq(v3InventoryItemsTable.qrToken, ""), sql`TRIM(${v3InventoryItemsTable.qrToken}) = ''`)!,
+  ];
+  const all = await db.select().from(v3InventoryItemsTable).where(and(...conditions));
+  const targets = itemIds?.length ? all.filter((i) => itemIds.includes(i.id)) : all;
+  const out: Array<{ id: number; qrToken: string }> = [];
+  for (const item of targets) {
+    const r = await ensureItemQrToken(item.id);
+    out.push({ id: r.item.id, qrToken: r.item.qrToken });
+  }
+  return { generated: out.length, items: out };
+}
+
+export async function updateProduct(
+  itemId: number,
+  patch: {
+    name?: string;
+    category?: string;
+    baseUnit?: string;
+    minimumStock?: number | null;
+    shortCode?: string | null;
+    isActive?: boolean;
+  },
+) {
+  const existing = await db.query.v3InventoryItemsTable.findFirst({
+    where: eq(v3InventoryItemsTable.id, itemId),
+  });
+  if (!existing) throw new AppError("ITEM_NOT_FOUND", "المادة غير موجودة", 404);
+
+  if (patch.isActive === false) {
+    const moves = await db
+      .select({ id: v3WarehouseMovementsTable.id })
+      .from(v3WarehouseMovementsTable)
+      .where(eq(v3WarehouseMovementsTable.inventoryItemId, itemId))
+      .limit(1);
+    // Soft-disable always allowed; hard delete never. History preserved.
+    void moves;
+  }
+
+  const name = patch.name != null ? patch.name.trim() : undefined;
+  if (name !== undefined && !name) throw new AppError("VALIDATION_ERROR", "اسم المادة مطلوب");
+
+  const [row] = await db
+    .update(v3InventoryItemsTable)
+    .set({
+      ...(name !== undefined ? { name } : {}),
+      ...(patch.category !== undefined ? { category: patch.category.trim() } : {}),
+      ...(patch.baseUnit !== undefined ? { baseUnit: patch.baseUnit.trim() } : {}),
+      ...(patch.minimumStock !== undefined ? { minimumStock: patch.minimumStock } : {}),
+      ...(patch.shortCode !== undefined
+        ? { shortCode: patch.shortCode?.trim() || null }
+        : {}),
+      ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(v3InventoryItemsTable.id, itemId))
+    .returning();
+  return row!;
+}
+
+export async function listProducts(opts: {
+  q?: string;
+  active?: "all" | "active" | "inactive";
+  qr?: "all" | "with" | "missing";
+  page?: number;
+  pageSize?: number;
+  warehouseOnly?: boolean;
+}) {
+  const page = Math.max(1, opts.page ?? 1);
+  const pageSize = Math.min(200, Math.max(1, opts.pageSize ?? 50));
+  const conditions = [];
+  if (opts.active === "active") conditions.push(eq(v3InventoryItemsTable.isActive, true));
+  if (opts.active === "inactive") conditions.push(eq(v3InventoryItemsTable.isActive, false));
+  if (opts.q?.trim()) conditions.push(ilike(v3InventoryItemsTable.name, `%${opts.q.trim()}%`));
+
+  const all = await db
+    .select()
+    .from(v3InventoryItemsTable)
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(v3InventoryItemsTable.name);
+
+  const presenceIds = opts.warehouseOnly ? await loadWarehousePresenceItemIds() : null;
+  let rows = all.filter((item) => {
+    if (presenceIds && !isWarehouseCatalogItem(item, presenceIds)) return false;
+    const hasQr = Boolean(item.qrToken?.trim());
+    if (opts.qr === "with" && !hasQr) return false;
+    if (opts.qr === "missing" && hasQr) return false;
+    return true;
+  });
+
+  const total = rows.length;
+  const start = (page - 1) * pageSize;
+  rows = rows.slice(start, start + pageSize);
+
+  return {
+    rows: rows.map((item) => {
+      const wh = item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric);
+      const min = item.minimumStock == null ? null : Number(item.minimumStock);
+      return {
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        baseUnit: item.baseUnit,
+        shortCode: item.shortCode,
+        minimumStock: min,
+        isActive: item.isActive,
+        warehouseQtyNumeric: wh,
+        kitchenQtyNumeric: item.kitchenQtyNumeric == null ? null : Number(item.kitchenQtyNumeric),
+        qrToken: item.qrToken,
+        hasQr: Boolean(item.qrToken?.trim()),
+        sourceType: item.sourceType,
+        stockStatus: canonicalStockStatus(wh, min),
+        legacyStatus: stockStatus(wh, min),
+        needsQuantityReview: item.needsQuantityReview,
+        needsReview: item.needsReview,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      };
+    }),
+    total,
+    page,
+    pageSize,
+  };
+}
+
+export async function listStockAlerts() {
+  const presenceIds = await loadWarehousePresenceItemIds();
+  const all = await db
+    .select()
+    .from(v3InventoryItemsTable)
+    .where(eq(v3InventoryItemsTable.isActive, true))
+    .orderBy(v3InventoryItemsTable.name);
+
+  const lastMoves = await db.execute(sql`
+    SELECT DISTINCT ON (inventory_item_id)
+      inventory_item_id AS id,
+      movement_date AS last_date,
+      movement_type AS last_type
+    FROM v3_warehouse_movements
+    WHERE status = 'active' AND inventory_item_id IS NOT NULL
+    ORDER BY inventory_item_id, movement_date DESC, id DESC
+  `);
+  const lastRows = ((lastMoves as unknown as { rows?: Array<Record<string, unknown>> }).rows
+    ?? (Array.isArray(lastMoves) ? (lastMoves as Array<Record<string, unknown>>) : [])) as Array<
+    Record<string, unknown>
+  >;
+  const lastMap = new Map<number, { lastDate: string | null; lastType: string | null }>();
+  for (const r of lastRows) {
+    lastMap.set(Number(r.id), {
+      lastDate: r.last_date ? String(r.last_date) : null,
+      lastType: r.last_type ? String(r.last_type) : null,
+    });
+  }
+
+  const mapped = all
+    .filter((item) => isWarehouseCatalogItem(item, presenceIds))
+    .map((item) => {
+      const wh = item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric);
+      const min = item.minimumStock == null ? null : Number(item.minimumStock);
+      const status = canonicalStockStatus(wh, min);
+      const last = lastMap.get(item.id);
+      return {
+        id: item.id,
+        name: item.name,
+        baseUnit: item.baseUnit,
+        warehouseQtyNumeric: wh,
+        minimumStock: min,
+        stockStatus: status,
+        lastMovementDate: last?.lastDate ?? null,
+        lastMovementType: last?.lastType ?? null,
+      };
+    });
+
+  const outOfStock = mapped.filter((r) => r.stockStatus === "OUT_OF_STOCK");
+  const lowStock = mapped.filter((r) => r.stockStatus === "LOW_STOCK");
+  const review = mapped.filter((r) => r.stockStatus === "REVIEW_REQUIRED");
+  const normal = mapped.filter((r) => r.stockStatus === "NORMAL");
+
+  return {
+    summary: {
+      total: mapped.length,
+      normal: normal.length,
+      lowStock: lowStock.length,
+      outOfStock: outOfStock.length,
+      reviewRequired: review.length,
+      alertCount: lowStock.length + outOfStock.length,
+    },
+    outOfStock,
+    lowStock,
+    reviewRequired: review,
+  };
+}
+
 /**
  * Item IDs that have real warehouse ledger activity (not kitchen-direct-only).
  * OPENING / WAREHOUSE_IN / WAREHOUSE_TO_KITCHEN / ADJUSTMENT or an opening_balances row.
@@ -182,7 +427,7 @@ export async function loadWarehousePresenceItemIds(
     FROM v3_warehouse_movements
     WHERE status = 'active'
       AND inventory_item_id IS NOT NULL
-      AND movement_type IN ('OPENING', 'WAREHOUSE_IN', 'WAREHOUSE_TO_KITCHEN', 'ADJUSTMENT')
+      AND movement_type IN ('OPENING', 'WAREHOUSE_IN', 'WAREHOUSE_OUT', 'WAREHOUSE_TO_KITCHEN', 'ADJUSTMENT')
   `);
   const ledgerRows = ((ledger as unknown as { rows?: Array<Record<string, unknown>> }).rows
     ?? (Array.isArray(ledger) ? (ledger as Array<Record<string, unknown>>) : [])) as Array<
@@ -483,8 +728,29 @@ export async function postWarehouseIn(input: {
   purchaseId?: number | null;
   clientRequestId?: string;
   batchKey?: string;
+  sourceChannel?: V3SourceChannel | string | null;
+  actorRole?: string | null;
 }) {
   return postMovement("WAREHOUSE_IN", input);
+}
+
+/** Pure warehouse OUT (does not increase kitchen). Same stock-safety rules as to-kitchen. */
+export async function postWarehouseOut(input: {
+  inventoryItemId: number;
+  movementDate?: string;
+  quantityNumeric?: number | null;
+  quantityRaw: string;
+  unitRaw?: string;
+  receiver?: string;
+  notes?: string;
+  actor: string;
+  userId?: number | null;
+  clientRequestId?: string;
+  batchKey?: string;
+  sourceChannel?: V3SourceChannel | string | null;
+  actorRole?: string | null;
+}) {
+  return postMovement("WAREHOUSE_OUT", input);
 }
 
 export async function postWarehouseToKitchen(input: {
@@ -503,6 +769,8 @@ export async function postWarehouseToKitchen(input: {
   needsReview?: boolean;
   sourceExcelRow?: number | null;
   originalNameRaw?: string | null;
+  sourceChannel?: V3SourceChannel | string | null;
+  actorRole?: string | null;
 }) {
   return postMovement("WAREHOUSE_TO_KITCHEN", input);
 }
@@ -521,8 +789,34 @@ export async function postKitchenDirectIn(input: {
   purchaseId?: number | null;
   clientRequestId?: string;
   batchKey?: string;
+  sourceChannel?: V3SourceChannel | string | null;
+  actorRole?: string | null;
 }) {
   return postMovement("KITCHEN_DIRECT_IN", input);
+}
+
+/** Audited warehouse adjustment (signed quantity: +add / −remove). */
+export async function postAdjustment(input: {
+  inventoryItemId: number;
+  movementDate?: string;
+  quantityNumeric: number;
+  quantityRaw?: string;
+  unitRaw?: string;
+  notes?: string;
+  actor: string;
+  userId?: number | null;
+  clientRequestId?: string;
+  batchKey?: string;
+  sourceChannel?: V3SourceChannel | string | null;
+  actorRole?: string | null;
+}) {
+  if (!Number.isFinite(input.quantityNumeric) || input.quantityNumeric === 0) {
+    throw new AppError("VALIDATION_ERROR", "فرق التعديل يجب أن يكون رقماً غير صفر");
+  }
+  return postMovement("ADJUSTMENT", {
+    ...input,
+    quantityRaw: input.quantityRaw || String(input.quantityNumeric),
+  });
 }
 
 async function postMovement(
@@ -546,16 +840,50 @@ async function postMovement(
     needsReview?: boolean;
     sourceExcelRow?: number | null;
     originalNameRaw?: string | null;
+    sourceChannel?: V3SourceChannel | string | null;
+    actorRole?: string | null;
   },
 ) {
   const run = async (tx: DbTx) => {
     const existing = await findByClientRequest(tx, input.clientRequestId);
-    if (existing) return { idempotent: true as const, movement: existing };
+    if (existing) {
+      const item = await tx.query.v3InventoryItemsTable.findFirst({
+        where: eq(v3InventoryItemsTable.id, existing.inventoryItemId ?? input.inventoryItemId),
+      });
+      const balances = item
+        ? {
+            warehouseQtyNumeric: item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric),
+            kitchenQtyNumeric: item.kitchenQtyNumeric == null ? null : Number(item.kitchenQtyNumeric),
+            needsQuantityReview: Boolean(item.needsQuantityReview),
+          }
+        : null;
+      return {
+        idempotent: true as const,
+        movement: existing,
+        balances,
+        item,
+        stockStatus: item
+          ? canonicalStockStatus(
+              item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric),
+              item.minimumStock == null ? null : Number(item.minimumStock),
+            )
+          : null,
+      };
+    }
 
-    const item = await tx.query.v3InventoryItemsTable.findFirst({
+    let item = await tx.query.v3InventoryItemsTable.findFirst({
       where: eq(v3InventoryItemsTable.id, input.inventoryItemId),
     });
     if (!item || !item.isActive) throw new AppError("ITEM_NOT_FOUND", "المادة غير موجودة", 404);
+
+    const isOutbound = movementType === "WAREHOUSE_TO_KITCHEN" || movementType === "WAREHOUSE_OUT";
+    if (isOutbound) {
+      await tx.execute(sql`SELECT id FROM v3_inventory_items WHERE id = ${item.id} FOR UPDATE`);
+      item = await tx.query.v3InventoryItemsTable.findFirst({
+        where: eq(v3InventoryItemsTable.id, input.inventoryItemId),
+      });
+      if (!item || !item.isActive) throw new AppError("ITEM_NOT_FOUND", "المادة غير موجودة", 404);
+    }
 
     const qtyRaw = String(input.quantityRaw ?? "").trim();
     if (!qtyRaw) throw new AppError("VALIDATION_ERROR", "الكمية مطلوبة");
@@ -565,21 +893,22 @@ async function postMovement(
         : input.quantityNumeric;
 
     let needsReview = Boolean(input.needsReview);
+    const qtyBefore = item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric);
 
-    if (movementType === "WAREHOUSE_TO_KITCHEN" && qtyNum != null) {
+    if (isOutbound && qtyNum != null) {
       if (!(qtyNum > 0)) throw new AppError("VALIDATION_ERROR", "الكمية يجب أن تكون أكبر من صفر");
-      const available = item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric);
+      const available = qtyBefore;
       if (!input.allowHistoricalImport) {
         if (available == null) {
           throw new AppError(
             "VALIDATION_ERROR",
-            "لا يمكن التحقق من الرصيد رقمياً لهذه المادة — حدّد كمية رقمية للافتتاح/الإدخال أولاً",
+            "لا يمكن الإخراج من رصيد غير محدد — صحّح الرصيد أولاً (مراجعة مطلوبة)",
           );
         }
         if (qtyNum > available + 1e-9) {
           throw new AppError(
             "INSUFFICIENT_STOCK",
-            "الكمية المطلوبة أكبر من الكمية الموجودة في المستودع.",
+            `الكمية المتاحة فقط ${available}`,
             400,
             { available, requested: qtyNum },
           );
@@ -595,6 +924,10 @@ async function postMovement(
       !(qtyNum > 0)
     ) {
       throw new AppError("VALIDATION_ERROR", "الكمية يجب أن تكون أكبر من صفر");
+    }
+
+    if (movementType === "ADJUSTMENT" && (qtyNum == null || !Number.isFinite(qtyNum) || qtyNum === 0)) {
+      throw new AppError("VALIDATION_ERROR", "فرق التعديل يجب أن يكون رقماً غير صفر");
     }
 
     const [movement] = await tx
@@ -617,6 +950,10 @@ async function postMovement(
         needsReview,
         sourceExcelRow: input.sourceExcelRow ?? null,
         originalNameRaw: input.originalNameRaw ?? null,
+        sourceChannel: input.sourceChannel?.trim() || null,
+        qtyBefore,
+        itemNameSnapshot: item.name,
+        actorRole: input.actorRole?.trim() || null,
       })
       .returning();
 
@@ -628,10 +965,25 @@ async function postMovement(
     }
 
     const balances = await recomputeItemBalances(tx, item.id);
+    await tx
+      .update(v3WarehouseMovementsTable)
+      .set({ qtyAfter: balances.warehouseQtyNumeric })
+      .where(eq(v3WarehouseMovementsTable.id, movement.id));
+
     const updated = await tx.query.v3InventoryItemsTable.findFirst({
       where: eq(v3InventoryItemsTable.id, item.id),
     });
-    return { idempotent: false as const, movement, balances, item: updated };
+    const status = canonicalStockStatus(
+      balances.warehouseQtyNumeric,
+      updated?.minimumStock == null ? null : Number(updated.minimumStock),
+    );
+    return {
+      idempotent: false as const,
+      movement: { ...movement, qtyAfter: balances.warehouseQtyNumeric },
+      balances,
+      item: updated,
+      stockStatus: status,
+    };
   };
 
   return db.transaction(async (tx) => run(tx));
@@ -895,21 +1247,25 @@ export async function voidMovement(input: {
   });
 }
 export async function getItemByQr(qrToken: string) {
+  const token = String(qrToken || "").trim();
+  if (!token) throw new AppError("VALIDATION_ERROR", "رمز QR مطلوب");
   const item = await db.query.v3InventoryItemsTable.findFirst({
-    where: eq(v3InventoryItemsTable.qrToken, qrToken),
+    where: eq(v3InventoryItemsTable.qrToken, token),
   });
-  if (!item) throw new AppError("ITEM_NOT_FOUND", "لا يوجد صنف لهذا الرمز", 404);
+  if (!item || !item.isActive) throw new AppError("ITEM_NOT_FOUND", "لا يوجد صنف لهذا الرمز", 404);
+  const wh = item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric);
+  const min = item.minimumStock == null ? null : Number(item.minimumStock);
   return {
     id: item.id,
     name: item.name,
     category: item.category,
     baseUnit: item.baseUnit,
-    warehouseQtyNumeric: item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric),
+    shortCode: item.shortCode,
+    warehouseQtyNumeric: wh,
     kitchenQtyNumeric: item.kitchenQtyNumeric == null ? null : Number(item.kitchenQtyNumeric),
-    status: stockStatus(
-      item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric),
-      item.minimumStock == null ? null : Number(item.minimumStock),
-    ),
+    minimumStock: min,
+    status: stockStatus(wh, min),
+    stockStatus: canonicalStockStatus(wh, min),
     qrToken: item.qrToken,
   };
 }

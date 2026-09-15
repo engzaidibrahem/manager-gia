@@ -20,9 +20,33 @@ export const V3_SOURCE_TYPES = [
   "MOVEMENT_ADDED",
   "MOVEMENT_CREATED_UNMAPPED",
   "MANUAL",
+  "KITCHEN_DIRECT",
 ] as const;
 
 export type V3SourceType = (typeof V3_SOURCE_TYPES)[number];
+
+/** How a warehouse mutation was initiated (audit / mobile readiness). */
+export const V3_SOURCE_CHANNELS = [
+  "WEB_ADMIN",
+  "MOBILE_ADMIN",
+  "MOBILE_QR",
+  "MOBILE_SEARCH",
+  "PURCHASE_IMPORT",
+  "STOCKTAKE",
+  "API",
+] as const;
+export type V3SourceChannel = (typeof V3_SOURCE_CHANNELS)[number];
+
+export const V3_CANONICAL_STOCK_STATUSES = [
+  "NORMAL",
+  "LOW_STOCK",
+  "OUT_OF_STOCK",
+  "REVIEW_REQUIRED",
+] as const;
+export type V3CanonicalStockStatus = (typeof V3_CANONICAL_STOCK_STATUSES)[number];
+
+export const V3_STOCKTAKE_STATUSES = ["DRAFT", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const;
+export type V3StocktakeStatus = (typeof V3_STOCKTAKE_STATUSES)[number];
 
 export const v3InventoryItemsTable = pgTable("v3_inventory_items", {
   id: serial("id").primaryKey(),
@@ -36,7 +60,9 @@ export const v3InventoryItemsTable = pgTable("v3_inventory_items", {
   warehouseQtyNumeric: numeric("warehouse_qty_numeric", { precision: 14, scale: 4, mode: "number" }),
   kitchenQtyNumeric: numeric("kitchen_qty_numeric", { precision: 14, scale: 4, mode: "number" }),
   qrToken: text("qr_token").notNull().default(""),
-  /** ORIGINAL_INVENTORY | MOVEMENT_ADDED | MOVEMENT_CREATED_UNMAPPED | MANUAL */
+  /** Optional short code printed on QR labels (not the QR identity). */
+  shortCode: text("short_code"),
+  /** ORIGINAL_INVENTORY | MOVEMENT_ADDED | MOVEMENT_CREATED_UNMAPPED | MANUAL | KITCHEN_DIRECT */
   sourceType: text("source_type").notNull().default("MANUAL"),
   sourceExcelRow: integer("source_excel_row"),
   originalNameRaw: text("original_name_raw"),
@@ -94,18 +120,69 @@ export const v3WarehouseMovementsTable = pgTable("v3_warehouse_movements", {
   voidedBy: text("voided_by"),
   voidReason: text("void_reason"),
   clientRequestId: text("client_request_id"),
+  /** WEB_ADMIN | MOBILE_QR | … — how the action was initiated */
+  sourceChannel: text("source_channel"),
+  /** Warehouse qty snapshot before this movement (audit). */
+  qtyBefore: numeric("qty_before", { precision: 14, scale: 4, mode: "number" }),
+  /** Warehouse qty snapshot after this movement (audit). */
+  qtyAfter: numeric("qty_after", { precision: 14, scale: 4, mode: "number" }),
+  itemNameSnapshot: text("item_name_snapshot"),
+  actorRole: text("actor_role"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex("v3_warehouse_movements_client_request_uidx").on(t.clientRequestId),
 ]);
 
+/** Full warehouse stocktake session (DRAFT does not alter balances). */
+export const v3StocktakesTable = pgTable("v3_stocktakes", {
+  id: serial("id").primaryKey(),
+  status: text("status").notNull().default("DRAFT"),
+  notes: text("notes"),
+  startedBy: text("started_by").notNull().default(""),
+  startedByUserId: integer("started_by_user_id"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  completedBy: text("completed_by"),
+  completedByUserId: integer("completed_by_user_id"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  cancelledBy: text("cancelled_by"),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  clientRequestId: text("client_request_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (t) => [
+  uniqueIndex("v3_stocktakes_client_request_uidx").on(t.clientRequestId),
+]);
+
+export const v3StocktakeLinesTable = pgTable("v3_stocktake_lines", {
+  id: serial("id").primaryKey(),
+  stocktakeId: integer("stocktake_id").notNull().references(() => v3StocktakesTable.id),
+  inventoryItemId: integer("inventory_item_id").notNull().references(() => v3InventoryItemsTable.id),
+  systemQuantityBefore: numeric("system_quantity_before", { precision: 14, scale: 4, mode: "number" }),
+  countedQuantity: numeric("counted_quantity", { precision: 14, scale: 4, mode: "number" }),
+  difference: numeric("difference", { precision: 14, scale: 4, mode: "number" }),
+  unit: text("unit").notNull().default(""),
+  countedBy: text("counted_by"),
+  countedByUserId: integer("counted_by_user_id"),
+  countedAt: timestamp("counted_at", { withTimezone: true }),
+  notes: text("notes"),
+  /** Movement created on COMPLETE (ADJUSTMENT), if any. */
+  adjustmentMovementId: integer("adjustment_movement_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (t) => [
+  uniqueIndex("v3_stocktake_lines_stocktake_item_uidx").on(t.stocktakeId, t.inventoryItemId),
+]);
+
 export type V3InventoryItem = typeof v3InventoryItemsTable.$inferSelect;
 export type V3OpeningBalance = typeof v3OpeningBalancesTable.$inferSelect;
 export type V3WarehouseMovement = typeof v3WarehouseMovementsTable.$inferSelect;
+export type V3Stocktake = typeof v3StocktakesTable.$inferSelect;
+export type V3StocktakeLine = typeof v3StocktakeLinesTable.$inferSelect;
 
 export const V3_MOVEMENT_TYPES = [
   "OPENING",
   "WAREHOUSE_IN",
+  "WAREHOUSE_OUT",
   "WAREHOUSE_TO_KITCHEN",
   "KITCHEN_DIRECT_IN",
   "ADJUSTMENT",

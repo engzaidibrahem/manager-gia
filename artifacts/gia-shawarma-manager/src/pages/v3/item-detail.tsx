@@ -54,6 +54,7 @@ export function V3ItemDetailPage({ lang }: { lang: Lang }) {
       <div className="mb-5 grid gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 sm:grid-cols-2 lg:grid-cols-3">
         <Info label={lang === "id" ? "Kategori" : "التصنيف"} value={item.category || "—"} />
         <Info label={lang === "id" ? "Satuan" : "الوحدة"} value={item.baseUnit || item.openingUnitRaw || "—"} />
+        <Info label="QR" value={String((item as { qrToken?: string }).qrToken || "—")} />
         <Info
           label={lang === "id" ? "Opening" : "رصيد الافتتاح"}
           value={item.openingNumeric != null ? String(item.openingNumeric) : item.openingRaw}

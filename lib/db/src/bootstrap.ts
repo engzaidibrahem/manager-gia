@@ -741,6 +741,47 @@ const MIGRATIONS = [
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS v3_salary_payments_client_request_uidx ON v3_salary_payments (client_request_id)`,
+  // PHASE 9 — product short code + movement audit + stocktakes
+  `ALTER TABLE v3_inventory_items ADD COLUMN IF NOT EXISTS short_code TEXT`,
+  `ALTER TABLE v3_warehouse_movements ADD COLUMN IF NOT EXISTS source_channel TEXT`,
+  `ALTER TABLE v3_warehouse_movements ADD COLUMN IF NOT EXISTS qty_before NUMERIC(14, 4)`,
+  `ALTER TABLE v3_warehouse_movements ADD COLUMN IF NOT EXISTS qty_after NUMERIC(14, 4)`,
+  `ALTER TABLE v3_warehouse_movements ADD COLUMN IF NOT EXISTS item_name_snapshot TEXT`,
+  `ALTER TABLE v3_warehouse_movements ADD COLUMN IF NOT EXISTS actor_role TEXT`,
+  `CREATE TABLE IF NOT EXISTS v3_stocktakes (
+  id SERIAL PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'DRAFT',
+  notes TEXT,
+  started_by TEXT NOT NULL DEFAULT '',
+  started_by_user_id INTEGER,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_by TEXT,
+  completed_by_user_id INTEGER,
+  completed_at TIMESTAMPTZ,
+  cancelled_by TEXT,
+  cancelled_at TIMESTAMPTZ,
+  client_request_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS v3_stocktakes_client_request_uidx ON v3_stocktakes (client_request_id)`,
+  `CREATE TABLE IF NOT EXISTS v3_stocktake_lines (
+  id SERIAL PRIMARY KEY,
+  stocktake_id INTEGER NOT NULL REFERENCES v3_stocktakes(id),
+  inventory_item_id INTEGER NOT NULL REFERENCES v3_inventory_items(id),
+  system_quantity_before NUMERIC(14, 4),
+  counted_quantity NUMERIC(14, 4),
+  difference NUMERIC(14, 4),
+  unit TEXT NOT NULL DEFAULT '',
+  counted_by TEXT,
+  counted_by_user_id INTEGER,
+  counted_at TIMESTAMPTZ,
+  notes TEXT,
+  adjustment_movement_id INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS v3_stocktake_lines_stocktake_item_uidx ON v3_stocktake_lines (stocktake_id, inventory_item_id)`,
 ];
 
 export async function bootstrapSchema(database: AppDatabase): Promise<void> {
@@ -761,6 +802,27 @@ export async function bootstrapSchema(database: AppDatabase): Promise<void> {
     } catch {
       // ignore migration races / unsupported IF NOT EXISTS quirks
     }
+  }
+
+  // PHASE 9 — ensure every inventory item has a stable unique QR token (additive backfill).
+  try {
+    const missing = await database.execute(sql`
+      SELECT id FROM v3_inventory_items
+      WHERE qr_token IS NULL OR TRIM(qr_token) = ''
+      ORDER BY id
+    `);
+    const rows = ((missing as unknown as { rows?: Array<{ id: number }> }).rows
+      ?? (Array.isArray(missing) ? (missing as Array<{ id: number }>) : [])) as Array<{ id: number }>;
+    for (const r of rows) {
+      const token = `v3-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${r.id}`;
+      await database.execute(sql`
+        UPDATE v3_inventory_items
+        SET qr_token = ${token}, updated_at = NOW()
+        WHERE id = ${r.id} AND (qr_token IS NULL OR TRIM(qr_token) = '')
+      `);
+    }
+  } catch {
+    // ignore on race / empty DB
   }
 }
 

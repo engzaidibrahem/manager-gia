@@ -137,7 +137,7 @@ describe("V3 Warehouse ledger", () => {
       });
     } catch (e) {
       threw = true;
-      assert.match(String((e as Error).message), /أكبر من الكمية|INSUFFICIENT|available/i);
+      assert.match(String((e as Error).message), /أكبر من الكمية|المتاح|INSUFFICIENT|available/i);
     }
     assert.equal(threw, true);
     const item = await db.query.v3InventoryItemsTable.findFirst({ where: eq(v3InventoryItemsTable.id, open.itemId!) });

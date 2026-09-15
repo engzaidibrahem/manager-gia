@@ -1,9 +1,11 @@
 import { type ReactNode, useState } from 'react';
 import {
-  Boxes, ChevronRight, Coffee, Globe2, Menu, PackageMinus, PackagePlus, ShieldCheck, ShoppingCart, Users, CalendarCheck, Wallet, X,
+  ArrowRightLeft, Boxes, ChevronRight, Coffee, ClipboardList, Globe2, Menu, Package, PackageMinus, PackagePlus, ShieldCheck, ShoppingCart, TriangleAlert, Users, CalendarCheck, Wallet, X,
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 import { useT, type Lang } from '@/lib/i18n';
+import { getV3StockAlerts } from '@/lib/v3-api';
 
 type IconType = typeof Boxes;
 
@@ -19,16 +21,32 @@ export function Shell({
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const t = useT(lang);
-  const nav: { href: string; label: string; icon: IconType }[] = [
+  const alerts = useQuery({
+    queryKey: ['v3-stock-alerts-nav'],
+    queryFn: getV3StockAlerts,
+    refetchInterval: 60_000,
+  });
+  const alertCount = alerts.data?.summary.alertCount ?? 0;
+  const isAdmin = user?.role === 'owner' || user?.role === 'manager';
+  const nav: { href: string; label: string; icon: IconType; adminOnly?: boolean }[] = [
     { href: '/warehouse', label: lang === 'id' ? 'Gudang' : 'المستودع', icon: Boxes },
-    { href: '/warehouse-in', label: lang === 'id' ? 'Masuk gudang' : 'إدخال للمستودع', icon: PackagePlus },
-    { href: '/warehouse-out', label: lang === 'id' ? 'Keluar dapur' : 'إخراج للمطبخ', icon: PackageMinus },
+    { href: '/products', label: lang === 'id' ? 'Produk' : 'المنتجات', icon: Package, adminOnly: true },
+    { href: '/stocktake', label: lang === 'id' ? 'Stocktake' : 'الجرد', icon: ClipboardList, adminOnly: true },
+    { href: '/stock-alerts', label: lang === 'id' ? 'Peringatan' : 'تنبيهات', icon: TriangleAlert, adminOnly: true },
+    { href: '/warehouse-in', label: lang === 'id' ? 'Masuk gudang' : 'إدخال للمستودع', icon: PackagePlus, adminOnly: true },
+    { href: '/warehouse-out', label: lang === 'id' ? 'Keluar gudang' : 'إخراج من المستودع', icon: PackageMinus, adminOnly: true },
+    { href: '/warehouse-to-kitchen', label: lang === 'id' ? 'Ke dapur' : 'إخراج للمطبخ', icon: ArrowRightLeft },
     { href: '/kitchen', label: lang === 'id' ? 'Dapur' : 'المطبخ', icon: Coffee },
     { href: '/purchases', label: lang === 'id' ? 'Pembelian' : 'المشتريات', icon: ShoppingCart },
-    { href: '/finance', label: lang === 'id' ? 'Keuangan' : 'المالية', icon: Wallet },
-    { href: '/employees', label: lang === 'id' ? 'Karyawan & Gaji' : 'الموظفون والرواتب', icon: Users },
+    { href: '/finance', label: lang === 'id' ? 'Keuangan' : 'المالية', icon: Wallet, adminOnly: true },
+    { href: '/employees', label: lang === 'id' ? 'Karyawan & Gaji' : 'الموظفون والرواتب', icon: Users, adminOnly: true },
     { href: '/attendance', label: lang === 'id' ? 'Absensi' : 'الحضور', icon: CalendarCheck },
-  ];
+  ].filter((n) => {
+    if (!n.adminOnly) return true;
+    if (isAdmin) return true;
+    if (user?.role === 'cashier' && (n.href === '/finance' || n.href === '/employees')) return true;
+    return false;
+  });
   return (
     <div className={`app-shell grain ${lang === 'ar' ? 'rtl' : ''}`}>
       <aside className={`sidebar-grid fixed inset-y-0 z-40 flex w-[248px] flex-col border-r border-[hsl(var(--border))] bg-[hsl(var(--card)/.96)] px-4 py-5 backdrop-blur-sm transition-transform md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} ${lang === 'ar' ? 'right-0 border-l border-r-0 md:translate-x-0' : 'left-0'}`}>
@@ -69,6 +87,17 @@ export function Shell({
           <button onClick={() => setMobileOpen(true)} className="rounded-xl border border-[hsl(var(--border))] p-2 md:hidden"><Menu size={19} /></button>
           <div className="hidden text-xs text-[hsl(var(--muted-foreground))] md:block"><span className="font-mono">{new Intl.DateTimeFormat(lang === 'id' ? 'id-ID' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', numberingSystem: 'latn' }).format(new Date())}</span></div>
           <div className="ml-auto flex items-center gap-2">
+            {isAdmin && alertCount > 0 ? (
+              <Link
+                href="/stock-alerts"
+                className="hidden items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-[11px] font-bold text-orange-900 md:flex"
+              >
+                <TriangleAlert size={14} />
+                {lang === 'id'
+                  ? `${alertCount} bahan perlu perhatian`
+                  : `⚠️ ${alertCount} مادة وصلت للحد الأدنى / نفدت`}
+              </Link>
+            ) : null}
             {user ? (
               <div className="hidden items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-[11px] font-semibold md:flex">
                 <span>{user.fullName || user.username}</span>

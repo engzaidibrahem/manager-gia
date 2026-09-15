@@ -149,6 +149,171 @@ export function postV3ToKitchen(body: Record<string, unknown>) {
   return api("/warehouse/to-kitchen", { method: "POST", body: JSON.stringify(body) });
 }
 
+export function postV3WarehouseOut(body: Record<string, unknown>) {
+  return api("/warehouse/out", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function postV3Adjustment(body: Record<string, unknown>) {
+  return api("/warehouse/adjust", { method: "POST", body: JSON.stringify(body) });
+}
+
+export type V3ProductSearchRow = {
+  id: number;
+  name: string;
+  baseUnit: string;
+  warehouseQtyNumeric: number | null;
+  minimumStock: number | null;
+  stockStatus: string;
+  hasQr: boolean;
+};
+
+export function searchV3Products(q: string, pageSize = 20) {
+  const params = new URLSearchParams({ q, pageSize: String(pageSize), page: "1" });
+  return api<{ rows: V3ProductSearchRow[]; total: number }>(`/products/search?${params}`);
+}
+
+export function listV3Products(params: Record<string, string | number | undefined> = {}) {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v != null && v !== "") q.set(k, String(v));
+  });
+  return api<{
+    rows: Array<{
+      id: number;
+      name: string;
+      category: string;
+      baseUnit: string;
+      shortCode: string | null;
+      minimumStock: number | null;
+      isActive: boolean;
+      warehouseQtyNumeric: number | null;
+      qrToken: string;
+      hasQr: boolean;
+      stockStatus: string;
+    }>;
+    total: number;
+    page: number;
+    pageSize: number;
+  }>(`/products?${q}`);
+}
+
+export function createV3Product(body: Record<string, unknown>) {
+  return api("/products", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function updateV3Product(id: number, body: Record<string, unknown>) {
+  return api(`/products/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function ensureV3ProductQr(id: number) {
+  return api<{ item: { id: number; qrToken: string; name: string }; created: boolean }>(
+    `/products/${id}/ensure-qr`,
+    { method: "POST", body: "{}" },
+  );
+}
+
+export function generateMissingV3Qr(itemIds?: number[]) {
+  return api<{ generated: number; items: Array<{ id: number; qrToken: string }> }>(
+    "/products/qr/generate-missing",
+    { method: "POST", body: JSON.stringify({ itemIds }) },
+  );
+}
+
+export function getV3ProductByQr(token: string) {
+  return api<{
+    id: number;
+    name: string;
+    baseUnit: string;
+    warehouseQtyNumeric: number | null;
+    minimumStock: number | null;
+    stockStatus: string;
+    qrToken: string;
+  }>(`/products/by-qr/${encodeURIComponent(token)}`);
+}
+
+export function getV3StockAlerts() {
+  return api<{
+    summary: {
+      total: number;
+      normal: number;
+      lowStock: number;
+      outOfStock: number;
+      reviewRequired: number;
+      alertCount: number;
+    };
+    outOfStock: Array<Record<string, unknown>>;
+    lowStock: Array<Record<string, unknown>>;
+    reviewRequired: Array<Record<string, unknown>>;
+  }>("/stock-alerts");
+}
+
+export function listV3Stocktakes() {
+  return api<{ rows: Array<Record<string, unknown>>; total: number }>("/stocktakes");
+}
+
+export function startV3Stocktake(body: Record<string, unknown> = {}) {
+  return api<{ stocktake: { id: number; status: string }; idempotent: boolean }>("/stocktakes", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getV3StocktakeProgress(id: number) {
+  return api<{
+    stocktakeId: number;
+    status: string;
+    totalProducts: number;
+    countedProducts: number;
+    remainingProducts: number;
+    newProducts: number;
+    differencesCount: number;
+    canComplete: boolean;
+    lines: Array<{
+      inventoryItemId: number;
+      itemName: string;
+      countStatus: string;
+    }>;
+  }>(`/stocktakes/${id}/progress`);
+}
+
+export function getV3Stocktake(id: number) {
+  return api<{
+    stocktake: { id: number; status: string; notes: string | null };
+    lines: Array<{
+      id: number;
+      inventoryItemId: number;
+      itemName: string;
+      itemUnit: string;
+      systemQuantityBefore: number | null;
+      countedQuantity: number | null;
+      difference: number | null;
+    }>;
+  }>(`/stocktakes/${id}`);
+}
+
+export function saveV3StocktakeDraft(id: number, notes?: string) {
+  return api(`/stocktakes/${id}/draft`, { method: "POST", body: JSON.stringify({ notes }) });
+}
+
+export function upsertV3StocktakeLine(stocktakeId: number, itemId: number, body: Record<string, unknown>) {
+  return api(`/stocktakes/${stocktakeId}/lines/${itemId}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export function addV3StocktakeProduct(stocktakeId: number, body: Record<string, unknown>) {
+  return api(`/stocktakes/${stocktakeId}/products`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function completeV3Stocktake(id: number) {
+  return api(`/stocktakes/${id}/complete`, { method: "POST", body: "{}" });
+}
+
+export function cancelV3Stocktake(id: number, reason?: string) {
+  return api(`/stocktakes/${id}/cancel`, { method: "POST", body: JSON.stringify({ reason }) });
+}
+
 export function listV3Movements(params: Record<string, string | number | undefined>) {
   const q = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {

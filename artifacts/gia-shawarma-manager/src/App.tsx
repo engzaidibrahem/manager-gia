@@ -14,6 +14,7 @@ import { V3WarehousePage } from '@/pages/v3/warehouse';
 import { V3OpeningPage } from '@/pages/v3/opening';
 import { V3WarehouseInPage } from '@/pages/v3/warehouse-in';
 import { V3WarehouseOutPage } from '@/pages/v3/warehouse-out';
+import { V3WarehouseToKitchenPage } from '@/pages/v3/warehouse-to-kitchen';
 import { V3KitchenPage } from '@/pages/v3/kitchen';
 import { V3PurchasesPage } from '@/pages/v3/purchases';
 import { V3PurchaseImportPage } from '@/pages/v3/purchase-import';
@@ -22,6 +23,10 @@ import { V3EmployeesPage } from '@/pages/v3/employees';
 import { V3EmployeeDetailPage } from '@/pages/v3/employee-detail';
 import { V3AttendancePage } from '@/pages/v3/attendance';
 import { V3ItemDetailPage } from '@/pages/v3/item-detail';
+import { V3ProductsPage } from '@/pages/v3/products';
+import { V3ProductsQrPage } from '@/pages/v3/products-qr';
+import { V3StockAlertsPage } from '@/pages/v3/stock-alerts';
+import { V3StocktakePage } from '@/pages/v3/stocktake';
 
 const queryClient = new QueryClient();
 installAuthFetch();
@@ -43,11 +48,15 @@ function AppRouter({ user, onLogout }: { user: AuthUser; onLogout: () => void })
           <Route path="/warehouse/:id"><V3ItemDetailPage lang={lang} /></Route>
           <Route path="/warehouse"><V3WarehousePage lang={lang} /></Route>
           <Route path="/inventory"><V3WarehousePage lang={lang} /></Route>
+          <Route path="/products/qr"><V3ProductsQrPage lang={lang} /></Route>
+          <Route path="/products"><V3ProductsPage lang={lang} /></Route>
+          <Route path="/stock-alerts"><V3StockAlertsPage lang={lang} /></Route>
+          <Route path="/stocktake"><V3StocktakePage lang={lang} /></Route>
           <Route path="/opening"><V3OpeningPage lang={lang} /></Route>
           <Route path="/opening-balance"><V3OpeningPage lang={lang} /></Route>
           <Route path="/warehouse-in"><V3WarehouseInPage lang={lang} /></Route>
           <Route path="/warehouse-out"><V3WarehouseOutPage lang={lang} /></Route>
-          <Route path="/warehouse-to-kitchen"><V3WarehouseOutPage lang={lang} /></Route>
+          <Route path="/warehouse-to-kitchen"><V3WarehouseToKitchenPage lang={lang} /></Route>
           <Route path="/kitchen"><V3KitchenPage lang={lang} /></Route>
           <Route path="/purchases/import"><V3PurchaseImportPage lang={lang} /></Route>
           <Route path="/purchases"><V3PurchasesPage lang={lang} /></Route>

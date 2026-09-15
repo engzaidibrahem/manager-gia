@@ -17,7 +17,9 @@ export type AppErrorCode =
   | "UNAUTHORIZED_OPERATION"
   | "VALIDATION_ERROR"
   | "WASTE_IMMUTABLE"
-  | "CONFLICT";
+  | "CONFLICT"
+  | "NOT_FOUND"
+  | "INTERNAL";
 
 export class AppError extends Error {
   readonly code: AppErrorCode;

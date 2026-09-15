@@ -2,17 +2,38 @@ import { Router, type IRouter, type Request, type Response, type NextFunction } 
 import { z } from "zod";
 import {
   createItem,
+  ensureItemQrToken,
+  ensureMissingQrTokens,
   getItemByQr,
   getWarehouseItemDetail,
   listItemsBrief,
   listKitchenStock,
   listMovements,
+  listProducts,
+  listStockAlerts,
   listWarehouseSummary,
+  mapStatusQuery,
+  postAdjustment,
   postOpeningBalance,
   postWarehouseIn,
+  postWarehouseOut,
   postWarehouseToKitchen,
   updateItemMinimum,
+  updateProduct,
 } from "../v3/warehouseService";
+import {
+  addProductDuringStocktake,
+  cancelStocktake,
+  completeStocktake,
+  getStocktake,
+  getStocktakeProgress,
+  listStocktakes,
+  saveStocktakeDraft,
+  startStocktake,
+  upsertStocktakeLine,
+} from "../v3/stocktakeService";
+import { type Role } from "../auth/roles";
+import { requireRole } from "../auth/middleware";
 import {
   addPurchasePayment,
   createPurchase,
@@ -63,6 +84,16 @@ function userIdOf(req: Request) {
   return (req as Request & { user?: { id?: number } }).user?.id ?? null;
 }
 
+function roleOf(req: Request): Role | null {
+  return ((req as Request & { user?: { role?: Role } }).user?.role as Role) || null;
+}
+
+function sourceChannelOf(req: Request, fallback = "WEB_ADMIN") {
+  const body = (req.body || {}) as { sourceChannel?: string };
+  const header = String(req.headers["x-gia-source"] || "").trim();
+  return (body.sourceChannel || header || fallback).trim();
+}
+
 function asyncHandler(fn: (req: Request, res: Response) => Promise<void>) {
   return (req: Request, res: Response, next: NextFunction) => {
     fn(req, res).catch(next);
@@ -75,7 +106,7 @@ router.get(
     const data = await listWarehouseSummary({
       q: String(req.query.q || ""),
       category: String(req.query.category || ""),
-      status: (String(req.query.status || "all") as "all" | "available" | "low" | "out" | "unknown"),
+      status: mapStatusQuery(String(req.query.status || "all")),
       page: Number(req.query.page || 1),
       pageSize: Number(req.query.pageSize || 50),
     });
@@ -180,6 +211,62 @@ router.post(
       ...body,
       actor: actorOf(req),
       userId: userIdOf(req),
+      sourceChannel: sourceChannelOf(req),
+      actorRole: roleOf(req),
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  }),
+);
+
+router.post(
+  "/warehouse/out",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        inventoryItemId: z.number().int().positive(),
+        movementDate: z.string().optional(),
+        quantityNumeric: z.number().nullable().optional(),
+        quantityRaw: z.string().min(1),
+        unitRaw: z.string().optional(),
+        receiver: z.string().optional(),
+        notes: z.string().optional(),
+        clientRequestId: z.string().optional(),
+        sourceChannel: z.string().optional(),
+      })
+      .parse(req.body);
+    const result = await postWarehouseOut({
+      ...body,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+      sourceChannel: sourceChannelOf(req, body.sourceChannel || "WEB_ADMIN"),
+      actorRole: roleOf(req),
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  }),
+);
+
+router.post(
+  "/warehouse/adjust",
+  requireRole("owner", "manager"),
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        inventoryItemId: z.number().int().positive(),
+        quantityNumeric: z.number(),
+        quantityRaw: z.string().optional(),
+        unitRaw: z.string().optional(),
+        notes: z.string().min(1),
+        movementDate: z.string().optional(),
+        clientRequestId: z.string().optional(),
+        sourceChannel: z.string().optional(),
+      })
+      .parse(req.body);
+    const result = await postAdjustment({
+      ...body,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+      sourceChannel: sourceChannelOf(req, body.sourceChannel || "WEB_ADMIN"),
+      actorRole: roleOf(req),
     });
     res.status(result.idempotent ? 200 : 201).json(result);
   }),
@@ -198,12 +285,15 @@ router.post(
         receiver: z.string().optional(),
         notes: z.string().optional(),
         clientRequestId: z.string().optional(),
+        sourceChannel: z.string().optional(),
       })
       .parse(req.body);
     const result = await postWarehouseToKitchen({
       ...body,
       actor: actorOf(req),
       userId: userIdOf(req),
+      sourceChannel: sourceChannelOf(req, body.sourceChannel || "WEB_ADMIN"),
+      actorRole: roleOf(req),
     });
     res.status(result.idempotent ? 200 : 201).json(result);
   }),
@@ -240,6 +330,263 @@ router.get(
   asyncHandler(async (req, res) => {
     const detail = await getWarehouseItemDetail(Number(req.params.id));
     res.json(detail);
+  }),
+);
+
+// ---- Products / QR / Alerts (Phase 9) ----
+router.get(
+  "/products",
+  asyncHandler(async (req, res) => {
+    const data = await listProducts({
+      q: String(req.query.q || ""),
+      active: (String(req.query.active || "all") as "all" | "active" | "inactive"),
+      qr: (String(req.query.qr || "all") as "all" | "with" | "missing"),
+      page: Number(req.query.page || 1),
+      pageSize: Number(req.query.pageSize || 50),
+      warehouseOnly: String(req.query.warehouseOnly || "") === "1",
+    });
+    res.json(data);
+  }),
+);
+
+/** Reusable partial search for web admin + future mobile (inventory_item_id identity). */
+router.get(
+  "/products/search",
+  asyncHandler(async (req, res) => {
+    const data = await listProducts({
+      q: String(req.query.q || ""),
+      active: "active",
+      page: Number(req.query.page || 1),
+      pageSize: Math.min(50, Number(req.query.pageSize || 20)),
+      warehouseOnly: true,
+    });
+    res.json({
+      rows: data.rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        baseUnit: r.baseUnit,
+        warehouseQtyNumeric: r.warehouseQtyNumeric,
+        minimumStock: r.minimumStock,
+        stockStatus: r.stockStatus,
+        hasQr: r.hasQr,
+      })),
+      total: data.total,
+      page: data.page,
+      pageSize: data.pageSize,
+    });
+  }),
+);
+
+router.post(
+  "/products",
+  requireRole("owner", "manager"),
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        name: z.string().min(1),
+        category: z.string().optional(),
+        baseUnit: z.string().optional(),
+        minimumStock: z.number().nullable().optional(),
+        shortCode: z.string().nullable().optional(),
+      })
+      .parse(req.body);
+    const row = await createItem(body);
+    if (body.shortCode) {
+      await updateProduct(row.id, { shortCode: body.shortCode });
+    }
+    const ensured = await ensureItemQrToken(row.id);
+    res.status(201).json(ensured.item);
+  }),
+);
+
+router.patch(
+  "/products/:id",
+  requireRole("owner", "manager"),
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const body = z
+      .object({
+        name: z.string().min(1).optional(),
+        category: z.string().optional(),
+        baseUnit: z.string().optional(),
+        minimumStock: z.number().nullable().optional(),
+        shortCode: z.string().nullable().optional(),
+        isActive: z.boolean().optional(),
+      })
+      .parse(req.body);
+    const row = await updateProduct(id, body);
+    res.json(row);
+  }),
+);
+
+router.post(
+  "/products/:id/ensure-qr",
+  requireRole("owner", "manager"),
+  asyncHandler(async (req, res) => {
+    const result = await ensureItemQrToken(Number(req.params.id));
+    res.json(result);
+  }),
+);
+
+router.post(
+  "/products/qr/generate-missing",
+  requireRole("owner", "manager"),
+  asyncHandler(async (req, res) => {
+    const body = z.object({ itemIds: z.array(z.number().int().positive()).optional() }).parse(req.body || {});
+    const result = await ensureMissingQrTokens(body.itemIds);
+    res.json(result);
+  }),
+);
+
+router.get(
+  "/products/by-qr/:token",
+  asyncHandler(async (req, res) => {
+    const item = await getItemByQr(String(req.params.token));
+    res.json(item);
+  }),
+);
+
+router.get(
+  "/stock-alerts",
+  asyncHandler(async (_req, res) => {
+    res.json(await listStockAlerts());
+  }),
+);
+
+router.get(
+  "/stock-alerts/summary",
+  asyncHandler(async (_req, res) => {
+    const data = await listStockAlerts();
+    res.json(data.summary);
+  }),
+);
+
+// ---- Stocktake ----
+router.get(
+  "/stocktakes",
+  asyncHandler(async (req, res) => {
+    res.json(
+      await listStocktakes({
+        status: req.query.status ? String(req.query.status) : undefined,
+        page: Number(req.query.page || 1),
+        pageSize: Number(req.query.pageSize || 20),
+      }),
+    );
+  }),
+);
+
+router.post(
+  "/stocktakes",
+  requireRole("owner", "manager"),
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        notes: z.string().optional(),
+        clientRequestId: z.string().optional(),
+      })
+      .parse(req.body || {});
+    const result = await startStocktake({
+      ...body,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  }),
+);
+
+router.get(
+  "/stocktakes/:id",
+  asyncHandler(async (req, res) => {
+    res.json(await getStocktake(Number(req.params.id)));
+  }),
+);
+
+router.get(
+  "/stocktakes/:id/progress",
+  asyncHandler(async (req, res) => {
+    res.json(await getStocktakeProgress(Number(req.params.id)));
+  }),
+);
+
+router.post(
+  "/stocktakes/:id/draft",
+  requireRole("owner", "manager"),
+  asyncHandler(async (req, res) => {
+    const body = z.object({ notes: z.string().optional() }).parse(req.body || {});
+    const row = await saveStocktakeDraft(Number(req.params.id), {
+      notes: body.notes,
+      actor: actorOf(req),
+    });
+    res.json(row);
+  }),
+);
+
+router.put(
+  "/stocktakes/:id/lines/:itemId",
+  requireRole("owner", "manager"),
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        countedQuantity: z.number().nullable(),
+        notes: z.string().optional(),
+      })
+      .parse(req.body);
+    const line = await upsertStocktakeLine(Number(req.params.id), {
+      inventoryItemId: Number(req.params.itemId),
+      countedQuantity: body.countedQuantity,
+      notes: body.notes,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+    });
+    res.json(line);
+  }),
+);
+
+router.post(
+  "/stocktakes/:id/products",
+  requireRole("owner", "manager"),
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        name: z.string().min(1),
+        baseUnit: z.string().optional(),
+        category: z.string().optional(),
+        minimumStock: z.number().nullable().optional(),
+        countedQuantity: z.number().nonnegative(),
+      })
+      .parse(req.body);
+    const result = await addProductDuringStocktake(Number(req.params.id), {
+      ...body,
+      actor: actorOf(req),
+      userId: userIdOf(req),
+    });
+    res.status(201).json(result);
+  }),
+);
+
+router.post(
+  "/stocktakes/:id/complete",
+  requireRole("owner", "manager"),
+  asyncHandler(async (req, res) => {
+    const result = await completeStocktake(Number(req.params.id), {
+      actor: actorOf(req),
+      userId: userIdOf(req),
+      actorRole: roleOf(req),
+    });
+    res.status(result.idempotent ? 200 : 201).json(result);
+  }),
+);
+
+router.post(
+  "/stocktakes/:id/cancel",
+  requireRole("owner", "manager"),
+  asyncHandler(async (req, res) => {
+    const body = z.object({ reason: z.string().optional() }).parse(req.body || {});
+    const result = await cancelStocktake(Number(req.params.id), {
+      actor: actorOf(req),
+      reason: body.reason,
+    });
+    res.json(result);
   }),
 );
 

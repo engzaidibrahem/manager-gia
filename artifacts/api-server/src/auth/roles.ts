@@ -1,6 +1,15 @@
 export const ROLES = ["owner", "manager", "warehouse", "kitchen", "cashier", "viewer"] as const;
 export type Role = (typeof ROLES)[number];
 
+/** Product-facing aliases (Phase 9): ADMIN = owner|manager, WAREHOUSE_STAFF = warehouse */
+export function isAdminRole(role: Role): boolean {
+  return role === "owner" || role === "manager";
+}
+
+export function isWarehouseStaffRole(role: Role): boolean {
+  return role === "warehouse";
+}
+
 export function isRole(value: string): value is Role {
   return (ROLES as readonly string[]).includes(value);
 }
@@ -18,6 +27,21 @@ export function canAccess(role: Role, method: string, path: string): boolean {
     if (write && p.includes("/backfill-legacy")) return false;
     // Opening balance is owner/manager only
     if (write && (p.includes("/opening-balance") || p.includes("/warehouse/opening"))) return false;
+
+    // Phase 9 — WAREHOUSE_STAFF: OUT + to-kitchen only (plus purchases legacy)
+    if (write) {
+      if (p.includes("/stocktake")) return false;
+      if (p.includes("/adjust")) return false;
+      if (p.includes("/products") && !p.includes("/by-qr")) return false;
+      if (p.includes("/minimum")) return false;
+      if (p.includes("/qr/generate") || p.includes("/qr/ensure") || p.includes("/ensure-qr")) return false;
+      if (p.startsWith("/v3/warehouse/in")) return false;
+      if (p.startsWith("/v3/warehouse/items") && method !== "GET") return false;
+      if (p.startsWith("/v3/warehouse/out") || p.startsWith("/v3/warehouse/to-kitchen")) return true;
+      if (p.startsWith("/v3/purchases") || p.startsWith("/purchases")) return true;
+      if (p.startsWith("/v3/")) return false;
+    }
+
     if (
       p.startsWith("/inventory")
       || p.startsWith("/purchases")

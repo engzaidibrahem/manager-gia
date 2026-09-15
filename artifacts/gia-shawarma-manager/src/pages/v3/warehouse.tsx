@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { PageHint, SecondaryButton, SelectInput, TextInput } from "@/components/FormKit";
 import { Flash, PageTitle } from "@/components/layout";
 import { listV3Warehouse, statusLabel, type V3WarehouseRow } from "@/lib/v3-api";
@@ -8,9 +8,12 @@ import { type Lang } from "@/lib/i18n";
 import { EmptyState, StatusBadge } from "./v3-ui";
 
 export function V3WarehousePage({ lang }: { lang: Lang }) {
+  const [location] = useLocation();
+  const params = new URLSearchParams(location.split("?")[1] || "");
+  const initialStatus = params.get("status") || "all";
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState(initialStatus);
   const [page, setPage] = useState(1);
 
   const query = useQuery({
@@ -58,10 +61,10 @@ export function V3WarehousePage({ lang }: { lang: Lang }) {
         </SelectInput>
         <SelectInput className="max-w-[180px]" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
           <option value="all">{lang === "id" ? "Semua status" : "الكل"}</option>
-          <option value="available">{lang === "id" ? "Tersedia" : "متوفر"}</option>
-          <option value="low">{lang === "id" ? "Rendah" : "منخفض"}</option>
-          <option value="out">{lang === "id" ? "Habis" : "نفد"}</option>
-          <option value="unknown">{lang === "id" ? "Perlu review" : "بحاجة مراجعة"}</option>
+          <option value="available">{lang === "id" ? "Tersedia / NORMAL" : "متوفر"}</option>
+          <option value="LOW_STOCK">{lang === "id" ? "LOW_STOCK" : "منخفض"}</option>
+          <option value="OUT_OF_STOCK">{lang === "id" ? "OUT_OF_STOCK" : "نفد"}</option>
+          <option value="REVIEW_REQUIRED">{lang === "id" ? "REVIEW_REQUIRED" : "بحاجة مراجعة"}</option>
         </SelectInput>
       </div>
 
