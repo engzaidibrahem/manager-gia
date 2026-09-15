@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-card: hsl(var(--card));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-danger: hsl(var(--danger));
+  --color-warn: hsl(var(--warn));
+  --color-ok: hsl(var(--ok));
+  --font-sans: var(--app-font);
+}
+
+:root {
+  --background: 36 38% 95%;
+  --foreground: 24 25% 17%;
+  --border: 35 20% 86%;
+  --card: 36 44% 98%;
+  --primary: 17 78% 43%;
+  --primary-foreground: 36 44% 98%;
+  --muted: 35 22% 91%;
+  --muted-foreground: 25 13% 46%;
+  --danger: 4 67% 47%;
+  --warn: 32 90% 42%;
+  --ok: 152 45% 32%;
+  --app-font: "Readex Pro", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--app-font);
+  background:
+    radial-gradient(120% 80% at 100% 0%, hsl(17 78% 43% / 0.08), transparent 50%),
+    radial-gradient(90% 60% at 0% 100%, hsl(45 80% 50% / 0.1), transparent 45%),
+    hsl(var(--background));
+  color: hsl(var(--foreground));
+  direction: rtl;
+}
+
+.safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.safe-top {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
+.btn-lg {
+  min-height: 3.25rem;
+  border-radius: 1rem;
+  font-weight: 700;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  box-shadow: 0 4px 0 hsl(17 78% 32%);
+}
+
+.btn-primary:disabled {
+  opacity: 0.55;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+.input-lg {
+  width: 100%;
+  min-height: 3.25rem;
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  padding: 0.75rem 1rem;
+  font-size: 1.125rem;
+  font-family: inherit;
+  color: inherit;
+}
+
+.input-lg:focus {
+  outline: 2px solid hsl(var(--primary) / 0.35);
+  border-color: hsl(var(--primary));
+}
+
+.card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 1.25rem;
+  padding: 1rem;
+}
+
+.stat {
+  text-align: center;
+  padding: 0.85rem 0.5rem;
+}
+
+.stat .n {
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.stat .l {
+  font-size: 0.7rem;
+  color: hsl(var(--muted-foreground));
+  margin-top: 0.25rem;
+  font-weight: 600;
+}

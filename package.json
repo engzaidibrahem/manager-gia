@@ -17,6 +17,8 @@
     "dev:v3": "node ./scripts/start-v3-api.mjs build-start",
     "start:v3": "node ./scripts/start-v3-api.mjs build-start",
     "test:v3": "pnpm --filter @workspace/api-server run test:v3",
+    "dev:mobile": "cross-env PORT=5174 BASE_PATH=/ pnpm --filter @workspace/gia-warehouse-mobile run dev",
+    "build:mobile": "pnpm --filter @workspace/gia-warehouse-mobile run build",
     "build:web": "pnpm --filter @workspace/gia-shawarma-manager run build"
   },
   "dependencies": {

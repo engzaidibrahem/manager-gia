@@ -10,6 +10,7 @@ import {
   listKitchenStock,
   listMovements,
   listProducts,
+  getProduct,
   listStockAlerts,
   listWarehouseSummary,
   mapStatusQuery,
@@ -152,12 +153,20 @@ router.get(
   "/warehouse/movements",
   asyncHandler(async (req, res) => {
     const type = req.query.type ? String(req.query.type) : undefined;
+    const mine = String(req.query.mine || "") === "1";
     const data = await listMovements({
-      movementType: type as "OPENING" | "WAREHOUSE_IN" | "WAREHOUSE_TO_KITCHEN" | "ADJUSTMENT" | undefined,
+      movementType: type as
+        | "OPENING"
+        | "WAREHOUSE_IN"
+        | "WAREHOUSE_OUT"
+        | "WAREHOUSE_TO_KITCHEN"
+        | "ADJUSTMENT"
+        | undefined,
       inventoryItemId: req.query.itemId ? Number(req.query.itemId) : undefined,
       fromDate: req.query.from ? String(req.query.from) : undefined,
       toDate: req.query.to ? String(req.query.to) : undefined,
       q: String(req.query.q || ""),
+      userId: mine ? userIdOf(req) ?? undefined : req.query.userId ? Number(req.query.userId) : undefined,
       page: Number(req.query.page || 1),
       pageSize: Number(req.query.pageSize || 50),
     });
@@ -447,6 +456,18 @@ router.get(
 );
 
 router.get(
+  "/products/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      res.status(404).json({ error: "NOT_FOUND", message: "المادة غير موجودة" });
+      return;
+    }
+    res.json(await getProduct(id));
+  }),
+);
+
+router.get(
   "/stock-alerts",
   asyncHandler(async (_req, res) => {
     res.json(await listStockAlerts());
@@ -529,12 +550,16 @@ router.put(
       .object({
         countedQuantity: z.number().nullable(),
         notes: z.string().optional(),
+        minimumStock: z.number().nullable().optional(),
+        baseUnit: z.string().optional(),
       })
       .parse(req.body);
     const line = await upsertStocktakeLine(Number(req.params.id), {
       inventoryItemId: Number(req.params.itemId),
       countedQuantity: body.countedQuantity,
       notes: body.notes,
+      minimumStock: body.minimumStock,
+      baseUnit: body.baseUnit,
       actor: actorOf(req),
       userId: userIdOf(req),
     });

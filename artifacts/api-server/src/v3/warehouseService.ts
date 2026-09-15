@@ -995,6 +995,8 @@ export async function listMovements(opts: {
   fromDate?: string;
   toDate?: string;
   q?: string;
+  userId?: number;
+  actor?: string;
   page?: number;
   pageSize?: number;
 }) {
@@ -1003,6 +1005,12 @@ export async function listMovements(opts: {
   const conditions = [eq(v3WarehouseMovementsTable.status, "active")];
   if (opts.inventoryItemId) {
     conditions.push(eq(v3WarehouseMovementsTable.inventoryItemId, opts.inventoryItemId));
+  }
+  if (opts.userId != null && Number.isFinite(opts.userId)) {
+    conditions.push(eq(v3WarehouseMovementsTable.userId, opts.userId));
+  }
+  if (opts.actor?.trim()) {
+    conditions.push(eq(v3WarehouseMovementsTable.actor, opts.actor.trim()));
   }
   if (opts.movementType) {
     const types = Array.isArray(opts.movementType) ? opts.movementType : [opts.movementType];
@@ -1246,6 +1254,32 @@ export async function voidMovement(input: {
     return { idempotent: false as const, movement: updated };
   });
 }
+export async function getProduct(itemId: number) {
+  const item = await db.query.v3InventoryItemsTable.findFirst({
+    where: eq(v3InventoryItemsTable.id, itemId),
+  });
+  if (!item) throw new AppError("ITEM_NOT_FOUND", "المادة غير موجودة", 404);
+  const wh = item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric);
+  const min = item.minimumStock == null ? null : Number(item.minimumStock);
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    baseUnit: item.baseUnit,
+    shortCode: item.shortCode,
+    minimumStock: min,
+    isActive: item.isActive,
+    warehouseQtyNumeric: wh,
+    kitchenQtyNumeric: item.kitchenQtyNumeric == null ? null : Number(item.kitchenQtyNumeric),
+    qrToken: item.qrToken,
+    hasQr: Boolean(item.qrToken?.trim()),
+    sourceType: item.sourceType,
+    stockStatus: canonicalStockStatus(wh, min),
+    needsQuantityReview: item.needsQuantityReview,
+    needsReview: item.needsReview,
+  };
+}
+
 export async function getItemByQr(qrToken: string) {
   const token = String(qrToken || "").trim();
   if (!token) throw new AppError("VALIDATION_ERROR", "رمز QR مطلوب");

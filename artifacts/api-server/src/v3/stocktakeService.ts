@@ -16,6 +16,7 @@ import {
   isWarehouseCatalogItem,
   loadWarehousePresenceItemIds,
   postAdjustment,
+  updateProduct,
 } from "./warehouseService";
 
 async function findStocktakeByClient(clientRequestId?: string) {
@@ -157,6 +158,7 @@ export async function getStocktakeProgress(id: number) {
       difference: l.difference,
       countStatus: l.countStatus,
       isActive: l.isActive,
+      notes: l.notes ?? null,
     })),
   };
 }
@@ -251,6 +253,10 @@ export async function upsertStocktakeLine(
     notes?: string;
     actor: string;
     userId?: number | null;
+    /** Review/set minimum during count — does NOT change warehouse qty. */
+    minimumStock?: number | null;
+    /** Correct unit label only — no silent quantity conversion. */
+    baseUnit?: string;
   },
 ) {
   const session = await getStocktakeRow(stocktakeId);
@@ -259,10 +265,22 @@ export async function upsertStocktakeLine(
     throw new AppError("VALIDATION_ERROR", "لا يمكن تعديل جرد مكتمل أو ملغى");
   }
 
-  const item = await db.query.v3InventoryItemsTable.findFirst({
+  let item = await db.query.v3InventoryItemsTable.findFirst({
     where: eq(v3InventoryItemsTable.id, input.inventoryItemId),
   });
   if (!item) throw new AppError("ITEM_NOT_FOUND", "المادة غير موجودة", 404);
+
+  // Meta updates during stocktake (identity/alerts only — never invent qty conversion).
+  if (input.minimumStock !== undefined || input.baseUnit !== undefined) {
+    const patch: { minimumStock?: number | null; baseUnit?: string } = {};
+    if (input.minimumStock !== undefined) patch.minimumStock = input.minimumStock;
+    if (input.baseUnit !== undefined) patch.baseUnit = input.baseUnit.trim();
+    item = await updateProduct(item.id, patch);
+    await ensureItemQrToken(item.id);
+    item = (await db.query.v3InventoryItemsTable.findFirst({
+      where: eq(v3InventoryItemsTable.id, input.inventoryItemId),
+    }))!;
+  }
 
   const system =
     item.warehouseQtyNumeric == null ? null : Number(item.warehouseQtyNumeric);
