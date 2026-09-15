@@ -1,8 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "vite",
+  "framework": null,
   "buildCommand": "pnpm run build",
   "outputDirectory": "dist/public",
+  "installCommand": "echo 'Use Git root monorepo install or prebuilt deploy'",
   "rewrites": [
     {
       "source": "/api/:path*",
